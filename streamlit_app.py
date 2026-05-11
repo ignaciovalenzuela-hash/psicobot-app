@@ -29,16 +29,18 @@ else:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# --- 5. CARGA DE DOCUMENTOS ---
+# --- 5. CARGA DE DOCUMENTOS (Cache inteligente) ---
 @st.cache_resource(show_spinner=False)
 def cargar_documentos():
     texto_total = ""
+    # Lee todos los archivos PDF en la carpeta raíz
     archivos = [f for f in os.listdir() if f.endswith('.pdf')]
     for a in archivos:
         try:
             with fitz.open(a) as doc:
                 for pagina in doc:
-                    texto_total += f"\n[FUENTE: {a}]\n{pagina.get_text()}"
+                    # Incluimos el nombre del archivo en cada página para que el bot sepa la fuente
+                    texto_total += f"\n\n[ARCHIVO: {a}]\n" + pagina.get_text()
         except:
             continue
     return texto_total
@@ -51,32 +53,45 @@ for message in st.session_state.messages:
         st.markdown(message["content"])
 
 # --- 7. LÓGICA DE PREGUNTAS Y RESPUESTAS ---
-if prompt := st.chat_input("¿En qué puedo ayudarte hoy?"):
+if prompt := st.chat_input("¿Qué deseas consultar hoy?"):
+    # Guardar y mostrar pregunta del usuario
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
+    # Respuesta del asistente
     with st.chat_message("assistant"):
         try:
-            # LÓGICA DE DETECCIÓN DINÁMICA
-            # Buscamos qué modelos están disponibles realmente para tu API Key
+            # Buscamos modelos disponibles para evitar errores 404
             modelos_disponibles = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-            
-            # Intentamos usar la versión 'flash' que aparezca en tu lista (v1.5 o v1)
             nombre_modelo = next((m for m in modelos_disponibles if "flash" in m), modelos_disponibles[0])
             
-            model = genai.GenerativeModel(nombre_modelo)
+            # CONFIGURACIÓN PRO: Temperatura baja para máxima precisión
+            model = genai.GenerativeModel(
+                model_name=nombre_modelo,
+                generation_config={
+                    "temperature": 0.1,
+                    "top_p": 0.95,
+                    "max_output_tokens": 1024,
+                }
+            )
             
+            # INSTRUCCIONES ESTRICTAS DE EXTRACCIÓN
             instrucciones = (
-                "Eres Psicobot. Respuestas amables, breves y precisas.\n"
-                "1. Diferencia CLASES ONLINE de CLASES PRESENCIALES.\n"
-                "2. Cita Artículos si hablas de reglamentos.\n"
-                "3. Si preguntan por un semestre, usa el archivo correspondiente.\n"
-                "No inventes información."
+                "Eres Psicobot, el asistente oficial de la carrera de Psicología. Tu objetivo es ahorrarle tiempo al alumno dando datos EXACTOS.\n\n"
+                "REGLAS CRÍTICAS:\n"
+                "1. EXTRACCIÓN TOTAL: Si te preguntan por una asignatura, busca en los calendarios: Fecha inicio/término, Jornadas Presenciales (días exactos), Horarios y Salas.\n"
+                "2. NO SEAS VAGO: No digas 'revisa el calendario' o 'mira tu portal' si la información está en los documentos. Entrega el dato aquí mismo.\n"
+                "3. MODALIDAD: Indica siempre si la clase es Online, Presencial o Híbrida según lo indique el documento.\n"
+                "4. FORMATO: Usa listas con puntos y negritas para que la información sea fácil de escanear visualmente.\n"
+                "5. SEMESTRES: Ten cuidado de no confundir calendarios. Si el alumno pregunta por una materia de 10mo, busca solo en el archivo de 10mo.\n"
+                "6. REGLAMENTOS: Si la duda es normativa, cita el número de Artículo correspondiente."
             )
 
-            full_prompt = f"{instrucciones}\n\nCONTEXTO:\n{contexto_facultad[:100000]}\n\nPREGUNTA: {prompt}"
+            # Construcción del prompt con contexto limitado para eficiencia
+            full_prompt = f"{instrucciones}\n\nCONTEXTO DE LA FACULTAD:\n{contexto_facultad[:120000]}\n\nPREGUNTA DEL ESTUDIANTE: {prompt}"
             
+            # Generar respuesta
             response = model.generate_content(full_prompt)
             
             if response.text:
@@ -84,5 +99,5 @@ if prompt := st.chat_input("¿En qué puedo ayudarte hoy?"):
                 st.session_state.messages.append({"role": "assistant", "content": response.text})
             
         except Exception as e:
-            st.error(f"Error de conexión: {str(e)[:150]}")
-            st.info("💡 Consejo: Si el error persiste, revisa que el archivo 'requirements.txt' esté creado en tu GitHub.")
+            st.error(f"Error de conexión: {str(e)[:100]}")
+            st.info("💡 Si este error persiste, intenta refrescar la página.")
