@@ -47,33 +47,24 @@ st.markdown("<h1 style='text-align: center;'>🧠 Psicobot</h1>", unsafe_allow_h
 
 contexto = cargar_informacion()
 
-pregunta = st.text_input("¿Qué deseas consultar?", placeholder="Ej: Fechas presenciales 6to semestre")
+pregunta = st.text_input("¿Qué deseas consultar?", placeholder="Ej: Fechas de exámenes 2026")
 
 if st.button("Consultar"):
     if pregunta:
-        with st.spinner("Conectando con la base de datos..."):
-            # Intentamos conectar con diferentes variantes del nombre del modelo
-            model = None
-            errores = []
-            
-            # Lista de nombres posibles para el modelo
-            nombres_posibles = ["gemini-1.5-flash", "models/gemini-1.5-flash", "gemini-1.5-flash-latest"]
-            
-            for nombre in nombres_posibles:
-                try:
-                    test_model = genai.GenerativeModel(nombre)
-                    # Prueba rápida de conexión
-                    test_model.generate_content("test", generation_config={"max_output_tokens": 1})
-                    model = test_model
-                    break # Si funciona, salimos del bucle
-                except Exception as e:
-                    errores.append(f"{nombre}: {str(e)[:50]}")
-            
-            if model is None:
-                st.error(f"No se pudo establecer conexión. Detalles: {errores}")
-                st.stop()
-
+        with st.spinner("Estableciendo conexión segura..."):
             try:
+                # PASO 1: Listar modelos disponibles REALES
+                modelos_reales = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+                
+                if not modelos_reales:
+                    st.error("No se encontraron modelos disponibles en tu cuenta de Google AI.")
+                    st.stop()
+                
+                # PASO 2: Intentar usar Flash, si no, el primero de la lista
+                seleccionado = next((m for m in modelos_reales if "flash" in m), modelos_reales[0])
+                model = genai.GenerativeModel(seleccionado)
+
+                # PASO 3: Generación de respuesta
                 safety = {
                     HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
                     HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
@@ -81,14 +72,14 @@ if st.button("Consultar"):
                     HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
                 }
 
-                config_inst = (
-                    "Eres Psicobot. Responde con precisión académica.\n"
-                    "FECHAS: Diferencia claramente 'Online' de 'Presencial'.\n"
-                    "REGLAMENTO: Cita artículos (Art. X).\n"
-                    "No menciones archivos PDF."
+                instrucciones = (
+                    "Eres Psicobot. Responde con precisión académica basándote en los documentos.\n"
+                    "Cita artículos de reglamentos (Art. X).\n"
+                    "Diferencia clases Presenciales de Online.\n"
+                    "No menciones que lees archivos."
                 )
 
-                prompt = f"{config_inst}\n\nDATOS:\n{contexto[:45000]}\n\nPREGUNTA: {pregunta}"
+                prompt = f"{instrucciones}\n\nDATOS:\n{contexto[:40000]}\n\nPREGUNTA: {pregunta}"
                 
                 response = model.generate_content(prompt, safety_settings=safety)
                 
@@ -96,12 +87,12 @@ if st.button("Consultar"):
                     st.markdown("---")
                     st.markdown(response.text)
                 else:
-                    st.warning("Respuesta vacía. Intenta reformular.")
+                    st.warning("La IA no generó texto. Intenta de nuevo.")
 
             except Exception as e:
-                st.error(f"Error en la generación: {str(e)}")
+                st.error(f"Error crítico de sistema: {str(e)}")
     else:
         st.warning("Escribe una pregunta.")
 
 st.markdown("---")
-st.caption("Psicobot v1.9 - Conexión Multi-Protocolo")
+st.caption("Psicobot v2.0 - Auto-Configuración Activa")
