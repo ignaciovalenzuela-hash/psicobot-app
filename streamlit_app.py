@@ -1,66 +1,9 @@
-import streamlit as st
-import google.generativeai as genai
-import fitz
-import os
-
-# --- 1. CONFIGURACIÓN DE PÁGINA ---
-st.set_page_config(page_title="Psicobot", page_icon="🧠", layout="centered")
-
-# --- 2. LOGO Y ENCABEZADO (Antes del Chat) ---
-# Esto asegura que el logo siempre esté al principio de la página
-col1, col2, col3 = st.columns([1, 1.2, 1]) # Ajuste de proporción para el logo
-with col2:
-    if os.path.exists("logo.png"):
-        st.image("logo.png", use_container_width=True)
-    else:
-        st.caption("🚀 Psicobot en línea")
-
-st.markdown("<h1 style='text-align: center;'>Psicobot</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: gray;'>Tu asistente oficial de Psicología 2026</p>", unsafe_allow_html=True)
-st.markdown("---")
-
-# --- 3. CONFIGURACIÓN DE API ---
-if "GOOGLE_API_KEY" in st.secrets:
-    genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-else:
-    st.error("Error: Configura la nueva API Key en los Secrets.")
-    st.stop()
-
-# --- 4. MEMORIA DEL CHAT ---
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-# --- 5. CARGA DE DOCUMENTOS ---
-@st.cache_resource(show_spinner=False)
-def cargar_documentos():
-    texto_total = ""
-    archivos = [f for f in os.listdir() if f.endswith('.pdf')]
-    for a in archivos:
-        try:
-            with fitz.open(a) as doc:
-                for pagina in doc:
-                    texto_total += f"\n[FUENTE: {a}]\n{pagina.get_text()}"
-        except: continue
-    return texto_total
-
-contexto_facultad = cargar_documentos()
-
-# --- 6. VISUALIZACIÓN DEL HISTORIAL ---
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-
-# --- 7. LÓGICA DE PREGUNTAS Y RESPUESTAS ---
-if prompt := st.chat_input("¿En qué puedo ayudarte hoy?"):
-    # Guardar y mostrar pregunta del usuario
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
-
-    # Respuesta del asistente
+# Respuesta del asistente
     with st.chat_message("assistant"):
         try:
-            model = genai.GenerativeModel('gemini-1.5-flash')
+            # CAMBIO CLAVE: Usamos el nombre del modelo con el prefijo 'models/'
+            # Esto soluciona el error 404 en las nuevas versiones de la API
+            model = genai.GenerativeModel('models/gemini-1.5-flash')
             
             instrucciones = (
                 "Eres Psicobot. Respuestas amables, breves y precisas.\n"
@@ -70,17 +13,28 @@ if prompt := st.chat_input("¿En qué puedo ayudarte hoy?"):
                 "4. No inventes fechas que no estén en el contexto."
             )
 
-            # Unimos instrucciones + documentos + pregunta
+            # Unimos todo
             full_prompt = f"{instrucciones}\n\nCONTEXTO:\n{contexto_facultad[:100000]}\n\nPREGUNTA: {prompt}"
             
+            # Generamos contenido con una configuración de seguridad básica
             response = model.generate_content(full_prompt)
-            respuesta = response.text
             
-            st.markdown(respuesta)
-            st.session_state.messages.append({"role": "assistant", "content": respuesta})
+            if response.text:
+                st.markdown(response.text)
+                st.session_state.messages.append({"role": "assistant", "content": response.text})
             
         except Exception as e:
-            if "429" in str(e):
-                st.error("⏳ Agotamos las pruebas en esta cuenta. ¡Mañana continuamos o cambia la clave!")
+            if "404" in str(e):
+                st.error("🔄 Error de ruta. Intentando conexión alternativa...")
+                # Reintento con nombre alternativo si el primero falla
+                try:
+                    model_alt = genai.GenerativeModel('gemini-1.5-flash')
+                    response = model_alt.generate_content(full_prompt)
+                    st.markdown(response.text)
+                    st.session_state.messages.append({"role": "assistant", "content": response.text})
+                except:
+                    st.error("No se pudo conectar con el modelo. Verifica que la API Key esté activa en Google AI Studio.")
+            elif "429" in str(e):
+                st.error("⏳ Agotamos las pruebas en esta cuenta.")
             else:
-                st.error(f"Error inesperado: {str(e)[:50]}")
+                st.error(f"Error: {str(e)[:100]}")
