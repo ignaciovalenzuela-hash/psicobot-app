@@ -3,21 +3,34 @@ import google.generativeai as genai
 import fitz
 import os
 
-# --- INICIALIZACIÓN DE LA APP ---
-st.set_page_config(page_title="Psicobot", page_icon="🧠")
+# --- 1. CONFIGURACIÓN DE PÁGINA ---
+st.set_page_config(page_title="Psicobot", page_icon="🧠", layout="centered")
 
-# Configurar API Key desde Secrets
+# --- 2. LOGO Y ENCABEZADO (Antes del Chat) ---
+# Esto asegura que el logo siempre esté al principio de la página
+col1, col2, col3 = st.columns([1, 1.2, 1]) # Ajuste de proporción para el logo
+with col2:
+    if os.path.exists("logo.png"):
+        st.image("logo.png", use_container_width=True)
+    else:
+        st.caption("🚀 Psicobot en línea")
+
+st.markdown("<h1 style='text-align: center;'>Psicobot</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: gray;'>Tu asistente oficial de Psicología 2026</p>", unsafe_allow_html=True)
+st.markdown("---")
+
+# --- 3. CONFIGURACIÓN DE API ---
 if "GOOGLE_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 else:
-    st.error("Configura la API Key en los Secrets de Streamlit.")
+    st.error("Error: Configura la nueva API Key en los Secrets.")
     st.stop()
 
-# --- MEMORIA DEL CHAT ---
+# --- 4. MEMORIA DEL CHAT ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# --- CARGA DE DOCUMENTOS (Cache inteligente) ---
+# --- 5. CARGA DE DOCUMENTOS ---
 @st.cache_resource(show_spinner=False)
 def cargar_documentos():
     texto_total = ""
@@ -32,57 +45,42 @@ def cargar_documentos():
 
 contexto_facultad = cargar_documentos()
 
-# --- ENCABEZADO CON LOGO ---
-# Creamos columnas para centrar el logo
-col1, col2, col3 = st.columns([1, 2, 1])
-with col2:
-    if os.path.exists("logo.png"):
-        st.image("logo.png", use_container_width=True)
-    else:
-        # Esto es solo por si acaso el archivo no se llama logo.png
-        st.write("⚠️ Archivo 'logo.png' no encontrado en GitHub")
-
-st.markdown("<h1 style='text-align: center;'>🧠 Psicobot</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: #555;'>Asistente Académico de Psicología</p>", unsafe_allow_html=True)
-st.markdown("---")
-
-# --- VISUALIZACIÓN DEL CHAT ---
-# Mostramos el historial de mensajes que están en la memoria
+# --- 6. VISUALIZACIÓN DEL HISTORIAL ---
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# --- ENTRADA DE USUARIO Y RESPUESTA ---
-if prompt := st.chat_input("Escribe tu duda aquí..."):
-    # 1. Mostrar y guardar pregunta del usuario
+# --- 7. LÓGICA DE PREGUNTAS Y RESPUESTAS ---
+if prompt := st.chat_input("¿En qué puedo ayudarte hoy?"):
+    # Guardar y mostrar pregunta del usuario
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # 2. Generar y mostrar respuesta del bot
+    # Respuesta del asistente
     with st.chat_message("assistant"):
         try:
             model = genai.GenerativeModel('gemini-1.5-flash')
             
             instrucciones = (
-                "Eres Psicobot. Tu respuesta debe ser amable y muy precisa.\n"
-                "1. Usa el contexto de los documentos cargados.\n"
-                "2. Si la pregunta es sobre FECHAS, indica claramente: ONLINE o PRESENCIAL.\n"
-                "3. Si es sobre reglamentos, cita el Artículo (Art. X).\n"
-                "4. Si la info no está, di que no tienes el registro exacto.\n"
-                "5. IMPORTANTE: Si te preguntan por un semestre específico, busca SOLO en ese calendario."
+                "Eres Psicobot. Respuestas amables, breves y precisas.\n"
+                "1. Diferencia CLASES ONLINE de CLASES PRESENCIALES.\n"
+                "2. Cita Artículos si hablas de reglamentos.\n"
+                "3. Si preguntan por un semestre, busca el archivo exacto de ese semestre.\n"
+                "4. No inventes fechas que no estén en el contexto."
             )
 
-            contenido_prompt = f"{instrucciones}\n\nCONTEXTO:\n{contexto_facultad[:100000]}\n\nPREGUNTA: {prompt}"
+            # Unimos instrucciones + documentos + pregunta
+            full_prompt = f"{instrucciones}\n\nCONTEXTO:\n{contexto_facultad[:100000]}\n\nPREGUNTA: {prompt}"
             
-            response = model.generate_content(contenido_prompt)
-            respuesta_texto = response.text
+            response = model.generate_content(full_prompt)
+            respuesta = response.text
             
-            st.markdown(respuesta_texto)
-            st.session_state.messages.append({"role": "assistant", "content": respuesta_texto})
+            st.markdown(respuesta)
+            st.session_state.messages.append({"role": "assistant", "content": respuesta})
             
         except Exception as e:
             if "429" in str(e):
-                st.error("⏳ Límite alcanzado. Reintenta en un minuto.")
+                st.error("⏳ Agotamos las pruebas en esta cuenta. ¡Mañana continuamos o cambia la clave!")
             else:
-                st.error("Hubo un error al conectar. Reintenta en breve.")
+                st.error(f"Error inesperado: {str(e)[:50]}")
