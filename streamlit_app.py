@@ -4,7 +4,7 @@ import google.generativeai as genai
 import os
 from google.generativeai.types import HarmCategory, HarmBlockThreshold
 
-# --- CONFIGURACIÓN DE SEGURIDAD ---
+# --- CONFIGURACIÓN DE LA LLAVE ---
 if "GOOGLE_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 else:
@@ -13,7 +13,7 @@ else:
 
 st.set_page_config(page_title="Psicobot", page_icon="🧠")
 
-# --- LECTURA OPTIMIZADA ---
+# --- LECTURA DE DOCUMENTOS ---
 @st.cache_resource(show_spinner=False)
 def cargar_informacion():
     texto_total = ""
@@ -47,15 +47,33 @@ st.markdown("<h1 style='text-align: center;'>🧠 Psicobot</h1>", unsafe_allow_h
 
 contexto = cargar_informacion()
 
-pregunta = st.text_input("¿Qué deseas consultar?", placeholder="Ej: Calendario presencial 4to semestre")
+pregunta = st.text_input("¿Qué deseas consultar?", placeholder="Ej: Fechas presenciales 6to semestre")
 
 if st.button("Consultar"):
     if pregunta:
-        with st.spinner("Buscando información..."):
+        with st.spinner("Conectando con la base de datos..."):
+            # Intentamos conectar con diferentes variantes del nombre del modelo
+            model = None
+            errores = []
+            
+            # Lista de nombres posibles para el modelo
+            nombres_posibles = ["gemini-1.5-flash", "models/gemini-1.5-flash", "gemini-1.5-flash-latest"]
+            
+            for nombre in nombres_posibles:
+                try:
+                    test_model = genai.GenerativeModel(nombre)
+                    # Prueba rápida de conexión
+                    test_model.generate_content("test", generation_config={"max_output_tokens": 1})
+                    model = test_model
+                    break # Si funciona, salimos del bucle
+                except Exception as e:
+                    errores.append(f"{nombre}: {str(e)[:50]}")
+            
+            if model is None:
+                st.error(f"No se pudo establecer conexión. Detalles: {errores}")
+                st.stop()
+
             try:
-                # Forzamos el uso de la versión estable
-                model = genai.GenerativeModel('gemini-1.5-flash')
-                
                 safety = {
                     HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
                     HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
@@ -63,16 +81,14 @@ if st.button("Consultar"):
                     HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
                 }
 
-                config = (
-                    "Eres Psicobot. Tu respuesta debe ser precisa y basada en los documentos.\n"
-                    "SI PREGUNTAN POR FECHAS: Revisa el calendario del semestre exacto.\n"
-                    "FORMATO: Diferencia 'Clases Online' de 'Clases Presenciales' con viñetas.\n"
-                    "REGLAMENTO: Cita artículos si corresponde (Ej: Art. 4).\n"
+                config_inst = (
+                    "Eres Psicobot. Responde con precisión académica.\n"
+                    "FECHAS: Diferencia claramente 'Online' de 'Presencial'.\n"
+                    "REGLAMENTO: Cita artículos (Art. X).\n"
                     "No menciones archivos PDF."
                 )
 
-                # Si el error persiste, intentamos reducir el tamaño del envío
-                prompt = f"{config}\n\nDATOS:\n{contexto[:50000]}\n\nPREGUNTA: {pregunta}"
+                prompt = f"{config_inst}\n\nDATOS:\n{contexto[:45000]}\n\nPREGUNTA: {pregunta}"
                 
                 response = model.generate_content(prompt, safety_settings=safety)
                 
@@ -80,16 +96,12 @@ if st.button("Consultar"):
                     st.markdown("---")
                     st.markdown(response.text)
                 else:
-                    st.warning("La IA no pudo procesar la respuesta. Intenta con una pregunta más específica.")
+                    st.warning("Respuesta vacía. Intenta reformular.")
 
             except Exception as e:
-                # Error detallado para saber si es por la cuota (QuotaExceeded)
-                if "429" in str(e):
-                    st.error("⏳ ¡Límite alcanzado! Espera 60 segundos antes de volver a preguntar.")
-                else:
-                    st.error(f"Se perdió la conexión temporalmente. Por favor, intenta de nuevo. (Detalle: {str(e)[:50]})")
+                st.error(f"Error en la generación: {str(e)}")
     else:
-        st.warning("Escribe tu pregunta.")
+        st.warning("Escribe una pregunta.")
 
 st.markdown("---")
-st.caption("Psicobot v1.8")
+st.caption("Psicobot v1.9 - Conexión Multi-Protocolo")
