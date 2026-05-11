@@ -52,32 +52,37 @@ for message in st.session_state.messages:
 
 # --- 7. LÓGICA DE PREGUNTAS Y RESPUESTAS ---
 if prompt := st.chat_input("¿En qué puedo ayudarte hoy?"):
-    # Guardar y mostrar pregunta del usuario
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Respuesta del asistente
     with st.chat_message("assistant"):
         try:
-            # Probamos la ruta que suele funcionar en versiones recientes
-            model = genai.GenerativeModel('gemini-1.5-flash')
+            # LÓGICA DE DETECCIÓN DINÁMICA
+            # Buscamos qué modelos están disponibles realmente para tu API Key
+            modelos_disponibles = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+            
+            # Intentamos usar la versión 'flash' que aparezca en tu lista (v1.5 o v1)
+            nombre_modelo = next((m for m in modelos_disponibles if "flash" in m), modelos_disponibles[0])
+            
+            model = genai.GenerativeModel(nombre_modelo)
             
             instrucciones = (
                 "Eres Psicobot. Respuestas amables, breves y precisas.\n"
                 "1. Diferencia CLASES ONLINE de CLASES PRESENCIALES.\n"
                 "2. Cita Artículos si hablas de reglamentos.\n"
-                "3. Si preguntan por un semestre, busca el archivo de ese semestre.\n"
-                "4. No inventes información."
+                "3. Si preguntan por un semestre, usa el archivo correspondiente.\n"
+                "No inventes información."
             )
 
             full_prompt = f"{instrucciones}\n\nCONTEXTO:\n{contexto_facultad[:100000]}\n\nPREGUNTA: {prompt}"
             
             response = model.generate_content(full_prompt)
-            respuesta = response.text
             
-            st.markdown(respuesta)
-            st.session_state.messages.append({"role": "assistant", "content": respuesta})
+            if response.text:
+                st.markdown(response.text)
+                st.session_state.messages.append({"role": "assistant", "content": response.text})
             
         except Exception as e:
-            st.error(f"Error de conexión: {str(e)[:100]}")
+            st.error(f"Error de conexión: {str(e)[:150]}")
+            st.info("💡 Consejo: Si el error persiste, revisa que el archivo 'requirements.txt' esté creado en tu GitHub.")
