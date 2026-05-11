@@ -8,16 +8,15 @@ from google.generativeai.types import HarmCategory, HarmBlockThreshold
 if "GOOGLE_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 else:
-    st.error("❌ Error: No se encuentra la API Key en los Secrets.")
+    st.error("❌ Error de configuración en Secrets.")
     st.stop()
 
 st.set_page_config(page_title="Psicobot", page_icon="🧠")
 
-# --- LECTURA DE DOCUMENTOS ---
+# --- LECTURA SILENCIOSA DE DOCUMENTOS ---
 @st.cache_resource
 def cargar_informacion():
     texto_total = ""
-    # LISTA ACTUALIZADA DE ARCHIVOS
     archivos = [
         "Doc1base.pdf", 
         "Reunión 2026-1 1.pdf", 
@@ -26,7 +25,6 @@ def cargar_informacion():
         "Preguntas Frecuentes Cierre Seminario.pdf"
     ]
     
-    encontrados = []
     for nombre in archivos:
         if os.path.exists(nombre):
             try:
@@ -34,69 +32,68 @@ def cargar_informacion():
                 for pagina in doc:
                     texto_total += pagina.get_text() + " "
                 doc.close()
-                encontrados.append(nombre)
             except:
                 continue
-    return texto_total.strip(), encontrados
+    return texto_total.strip()
 
-# --- INTERFAZ ---
+# --- INTERFAZ LIMPIA ---
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
     if os.path.exists("logo.png"):
         st.image("logo.png", use_container_width=True)
 
 st.markdown("<h1 style='text-align: center;'>🧠 Psicobot</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: #555;'>Asistente de la Facultad de Psicología</p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #555;'>Asistente Virtual - Facultad de Psicología</p>", unsafe_allow_html=True)
 
-contenido_contexto, lista_exito = cargar_informacion()
+contexto_contenido = cargar_informacion()
 
-# --- LÓGICA DE RESPUESTA ---
-pregunta = st.text_input("¿En qué puedo ayudarte?", placeholder="Ej: ¿Cuáles son las fechas del seminario?")
+# --- LÓGICA DE CONSULTA ---
+pregunta = st.text_input("¿En qué puedo ayudarte?", placeholder="Escribe tu duda aquí...")
 
 if st.button("Consultar"):
     if pregunta:
-        with st.spinner("Psicobot está revisando los documentos..."):
+        with st.spinner("Procesando consulta..."):
             try:
-                # Selección dinámica de modelo
-                modelos_disponibles = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-                nombre_modelo = "models/gemini-1.5-flash" if "models/gemini-1.5-flash" in modelos_disponibles else modelos_disponibles[0]
+                # Selección de modelo
+                modelos = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+                nombre_modelo = "models/gemini-1.5-flash" if "models/gemini-1.5-flash" in modelos else modelos[0]
                 
                 model = genai.GenerativeModel(nombre_modelo)
                 
-                # Configuración para evitar bloqueos por temas sensibles de psicología
-                filtros_paz = {
+                # Seguridad sin bloqueos para temas de psicología
+                filtros = {
                     HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
                     HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
                     HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
                     HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
                 }
 
-                if not contenido_contexto:
-                    prompt = f"Eres Psicobot, asistente de psicología. Responde de forma amable: {pregunta}"
-                else:
-                    # Limitamos el contexto para no saturar la memoria (aprox 30k caracteres)
-                    prompt = f"Eres Psicobot, el asistente oficial. Usa esta información institucional para responder:\n\n{contenido_contexto[:35000]}\n\nPregunta: {pregunta}"
+                # INSTRUCCIONES ESTRICTAS PARA EL BOT
+                instrucciones = (
+                    "Eres Psicobot, el asistente oficial de la Facultad de Psicología. "
+                    "Tu tono es profesional, servicial y experto. "
+                    "REGLAS DE ORO:\n"
+                    "1. NUNCA menciones que estás leyendo archivos, PDFs o documentos.\n"
+                    "2. NUNCA digas frases como 'según el documento' o 'en el archivo adjunto'.\n"
+                    "3. Si la respuesta está basada en un reglamento, DEBES citar el número de artículo correspondiente (ej: Art. 12).\n"
+                    "4. Si la información no está disponible, responde amablemente que no cuentas con ese dato específico por el momento.\n"
+                    "5. Mantén las respuestas concisas y claras."
+                )
 
-                response = model.generate_content(prompt, safety_settings=filtros_paz)
+                prompt_final = f"{instrucciones}\n\nContexto de la Facultad:\n{contexto_contenido[:38000]}\n\nPregunta del usuario: {pregunta}"
+
+                response = model.generate_content(prompt_final, safety_settings=filtros)
                 
                 if response.text:
-                    st.markdown("### 📝 Respuesta:")
+                    st.markdown("---")
                     st.info(response.text)
                 else:
-                    st.warning("No se pudo generar una respuesta detallada.")
+                    st.warning("No se pudo generar una respuesta. Por favor, intenta de nuevo.")
 
             except Exception as e:
-                st.error(f"Error de conexión: {str(e)}")
+                st.error("Hubo un inconveniente al procesar la respuesta. Por favor, intenta en un momento.")
     else:
-        st.warning("Por favor, escribe una pregunta.")
-
-# Mostrar archivos cargados (opcional, ayuda a verificar)
-with st.expander("Ver documentos cargados"):
-    if lista_exito:
-        for f in lista_exito:
-            st.write(f"✅ {f}")
-    else:
-        st.write("❌ No se detectaron archivos PDF.")
+        st.warning("Por favor, ingresa una pregunta.")
 
 st.markdown("---")
-st.caption("Psicobot v1.4 - Base de conocimientos ampliada")
+st.caption("© 2026 Facultad de Psicología - Asistente Virtual")
