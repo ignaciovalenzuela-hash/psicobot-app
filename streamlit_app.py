@@ -21,7 +21,6 @@ if "messages" not in st.session_state:
 @st.cache_resource(show_spinner=False)
 def cargar_documentos():
     texto_total = ""
-    # Busca todos los PDFs en la carpeta raíz
     archivos = [f for f in os.listdir() if f.endswith('.pdf')]
     for a in archivos:
         try:
@@ -33,50 +32,57 @@ def cargar_documentos():
 
 contexto_facultad = cargar_documentos()
 
-# --- INTERFAZ ---
-st.title("🧠 Psicobot: Asistente Académico")
-st.caption("Resuelvo dudas sobre calendarios, reglamentos y la carrera de Psicología.")
+# --- ENCABEZADO CON LOGO ---
+# Creamos columnas para centrar el logo
+col1, col2, col3 = st.columns([1, 2, 1])
+with col2:
+    if os.path.exists("logo.png"):
+        st.image("logo.png", use_container_width=True)
+    else:
+        # Esto es solo por si acaso el archivo no se llama logo.png
+        st.write("⚠️ Archivo 'logo.png' no encontrado en GitHub")
 
-# Mostrar historial
+st.markdown("<h1 style='text-align: center;'>🧠 Psicobot</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #555;'>Asistente Académico de Psicología</p>", unsafe_allow_html=True)
+st.markdown("---")
+
+# --- VISUALIZACIÓN DEL CHAT ---
+# Mostramos el historial de mensajes que están en la memoria
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Entrada de usuario
-if prompt := st.chat_input("¿Qué deseas saber?"):
-    # Agregar pregunta del usuario
+# --- ENTRADA DE USUARIO Y RESPUESTA ---
+if prompt := st.chat_input("Escribe tu duda aquí..."):
+    # 1. Mostrar y guardar pregunta del usuario
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Respuesta del bot
+    # 2. Generar y mostrar respuesta del bot
     with st.chat_message("assistant"):
         try:
-            # Seleccionamos el modelo más eficiente en costo
             model = genai.GenerativeModel('gemini-1.5-flash')
             
-            # Instrucciones estrictas
             instrucciones = (
-                "Eres Psicobot. Tu respuesta debe ser amable y precisa.\n"
+                "Eres Psicobot. Tu respuesta debe ser amable y muy precisa.\n"
                 "1. Usa el contexto de los documentos cargados.\n"
-                "2. Si la pregunta es sobre FECHAS, indica si son ONLINE o PRESENCIALES.\n"
-                "3. Si usas reglamentos, cita el Artículo (Art. X).\n"
-                "4. Si no sabes algo, indica que no está en los registros.\n"
-                "NO menciones que lees archivos PDF."
+                "2. Si la pregunta es sobre FECHAS, indica claramente: ONLINE o PRESENCIAL.\n"
+                "3. Si es sobre reglamentos, cita el Artículo (Art. X).\n"
+                "4. Si la info no está, di que no tienes el registro exacto.\n"
+                "5. IMPORTANTE: Si te preguntan por un semestre específico, busca SOLO en ese calendario."
             )
 
-            # Enviamos contexto + la pregunta actual
-            # (Limitamos el contexto a 50k tokens para ahorrar costos)
-            contenido_prompt = f"{instrucciones}\n\nCONTEXTO:\n{contexto_facultad[:100000]}\n\nPREGUNTA Estudiante: {prompt}"
+            contenido_prompt = f"{instrucciones}\n\nCONTEXTO:\n{contexto_facultad[:100000]}\n\nPREGUNTA: {prompt}"
             
             response = model.generate_content(contenido_prompt)
-            
             respuesta_texto = response.text
+            
             st.markdown(respuesta_texto)
             st.session_state.messages.append({"role": "assistant", "content": respuesta_texto})
             
         except Exception as e:
             if "429" in str(e):
-                st.error("⏳ El sistema está muy solicitado. Por favor, intenta en un minuto.")
+                st.error("⏳ Límite alcanzado. Reintenta en un minuto.")
             else:
-                st.error("Hubo un problema al procesar tu consulta. Reintenta en breve.")
+                st.error("Hubo un error al conectar. Reintenta en breve.")
