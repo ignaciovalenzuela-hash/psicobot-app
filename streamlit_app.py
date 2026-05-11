@@ -4,16 +4,16 @@ import google.generativeai as genai
 import os
 from google.generativeai.types import HarmCategory, HarmBlockThreshold
 
-# --- CONFIGURACIÓN DE LA LLAVE ---
+# --- CONFIGURACIÓN DE SEGURIDAD ---
 if "GOOGLE_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 else:
-    st.error("❌ Error de configuración en Secrets.")
+    st.error("Falta la API Key en Secrets.")
     st.stop()
 
 st.set_page_config(page_title="Psicobot", page_icon="🧠")
 
-# --- LECTURA DE DOCUMENTOS ---
+# --- LECTURA OPTIMIZADA ---
 @st.cache_resource(show_spinner=False)
 def cargar_informacion():
     texto_total = ""
@@ -33,13 +33,9 @@ def cargar_informacion():
             try:
                 with fitz.open(nombre) as doc:
                     for pagina in doc:
-                        # Añadimos etiquetas claras para que la IA no se confunda de semestre
-                        texto_total += f"\n--- INICIO DE DOCUMENTO: {nombre} ---\n"
-                        texto_total += pagina.get_text("text")
-                        texto_total += f"\n--- FIN DE DOCUMENTO: {nombre} ---\n"
-            except:
-                continue
-    return texto_total.strip()
+                        texto_total += f"\n[DOC: {nombre}]\n{pagina.get_text()}\n"
+            except: continue
+    return texto_total
 
 # --- INTERFAZ ---
 col1, col2, col3 = st.columns([1, 2, 1])
@@ -49,52 +45,51 @@ with col2:
 
 st.markdown("<h1 style='text-align: center;'>🧠 Psicobot</h1>", unsafe_allow_html=True)
 
-contexto_contenido = cargar_informacion()
+contexto = cargar_informacion()
 
-# --- LÓGICA DE CONSULTA ---
-pregunta = st.text_input("¿En qué puedo ayudarte?", placeholder="Ej: ¿Cuáles son las clases presenciales de 10mo semestre?")
+pregunta = st.text_input("¿Qué deseas consultar?", placeholder="Ej: Calendario presencial 4to semestre")
 
 if st.button("Consultar"):
     if pregunta:
-        with st.spinner("Analizando calendarios y modalidades..."):
+        with st.spinner("Buscando información..."):
             try:
-                modelos = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-                nombre_modelo = "models/gemini-1.5-flash" if "models/gemini-1.5-flash" in modelos else modelos[0]
-                model = genai.GenerativeModel(nombre_modelo)
+                # Forzamos el uso de la versión estable
+                model = genai.GenerativeModel('gemini-1.5-flash')
                 
-                filtros_seguridad = {
+                safety = {
                     HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
                     HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
                     HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
                     HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
                 }
 
-                # INSTRUCCIONES DE PRECISIÓN EXTREMA
-                instrucciones_sistema = (
-                    "Eres Psicobot, experto en la programación académica 2026-1 de Psicología. "
-                    "Cuando el usuario pregunte por fechas de un semestre o asignatura, DEBES:\n"
-                    "1. Identificar el archivo exacto correspondiente al semestre solicitado.\n"
-                    "2. Listar las fechas de clases diferenciando claramente cuáles son PRESENCIALES y cuáles son ONLINE.\n"
-                    "3. Si la asignatura es 100% online, indícalo explícitamente.\n"
-                    "4. Usa un formato de lista o tabla simple para que las fechas sean fáciles de leer.\n"
-                    "5. Si mencionas artículos de reglamentos, cítalos (ej: Art. X).\n"
-                    "6. NO menciones que estás leyendo PDFs."
+                config = (
+                    "Eres Psicobot. Tu respuesta debe ser precisa y basada en los documentos.\n"
+                    "SI PREGUNTAN POR FECHAS: Revisa el calendario del semestre exacto.\n"
+                    "FORMATO: Diferencia 'Clases Online' de 'Clases Presenciales' con viñetas.\n"
+                    "REGLAMENTO: Cita artículos si corresponde (Ej: Art. 4).\n"
+                    "No menciones archivos PDF."
                 )
 
-                prompt_final = f"{instrucciones_sistema}\n\nDATOS ACADÉMICOS:\n{contexto_contenido}\n\nPREGUNTA DEL ALUMNO: {pregunta}"
-
-                response = model.generate_content(prompt_final, safety_settings=filtros_seguridad)
+                # Si el error persiste, intentamos reducir el tamaño del envío
+                prompt = f"{config}\n\nDATOS:\n{contexto[:50000]}\n\nPREGUNTA: {pregunta}"
+                
+                response = model.generate_content(prompt, safety_settings=safety)
                 
                 if response.text:
                     st.markdown("---")
-                    st.markdown(response.text) # Usamos markdown para que las tablas/listas se vean bien
+                    st.markdown(response.text)
                 else:
-                    st.warning("No pude encontrar fechas exactas para esa consulta.")
+                    st.warning("La IA no pudo procesar la respuesta. Intenta con una pregunta más específica.")
 
             except Exception as e:
-                st.error("Error de conexión. Intenta nuevamente.")
+                # Error detallado para saber si es por la cuota (QuotaExceeded)
+                if "429" in str(e):
+                    st.error("⏳ ¡Límite alcanzado! Espera 60 segundos antes de volver a preguntar.")
+                else:
+                    st.error(f"Se perdió la conexión temporalmente. Por favor, intenta de nuevo. (Detalle: {str(e)[:50]})")
     else:
-        st.warning("Escribe una pregunta para ayudarte.")
+        st.warning("Escribe tu pregunta.")
 
 st.markdown("---")
-st.caption("Psicobot v1.7 - Especialista en Calendarios Académicos")
+st.caption("Psicobot v1.8")
