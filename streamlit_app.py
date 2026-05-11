@@ -13,30 +13,38 @@ else:
 
 st.set_page_config(page_title="Psicobot", page_icon="🧠")
 
-# --- LECTURA PROFUNDA DE DOCUMENTOS ---
+# --- LECTURA MASIVA DE DOCUMENTOS ---
 @st.cache_resource(show_spinner=False)
 def cargar_informacion():
     texto_total = ""
-    # Nombres exactos de tus archivos en GitHub
+    # LISTA COMPLETA DE ARCHIVOS
     archivos = [
         "Doc1base.pdf", 
         "Reunión 2026-1 1.pdf", 
         "Calendario semi.pdf",
         "Documento informativo carrera de psicología.pdf",
-        "Preguntas Frecuentes Cierre Seminario.pdf"
+        "Preguntas Frecuentes Cierre Seminario.pdf",
+        "Calendario 1er semestre 2026-1.pdf",
+        "Calendario 2do semestre 2026-1.pdf",
+        "Calendario 3er semestre 2026-1.pdf",
+        "Calendario 4to semestre 2026-1.pdf",
+        "Calendario 5to semestre 2026-1.pdf",
+        "Calendario 6to semestre 2026-1.pdf",
+        "Calendario 7mo semestre 2026-1.pdf",
+        "Calendario 8vo semestre 2026-1.pdf",
+        "Calendario 9no semestre 2026-1.pdf",
+        "Calendario 10mo semestre 2026-1.pdf"
     ]
     
     for nombre in archivos:
         if os.path.exists(nombre):
             try:
-                # Abrimos el archivo de forma explícita
                 with fitz.open(nombre) as doc:
                     for pagina in doc:
-                        # Extraemos texto limpio y agregamos saltos de línea
-                        texto_total += f"\n--- ORIGEN: {nombre} ---\n"
+                        texto_total += f"\n[ARCHIVO: {nombre}]\n"
                         texto_total += pagina.get_text("text")
-            except Exception as e:
-                print(f"Error cargando {nombre}: {e}")
+            except:
+                continue
     return texto_total.strip()
 
 # --- INTERFAZ ---
@@ -46,48 +54,49 @@ with col2:
         st.image("logo.png", use_container_width=True)
 
 st.markdown("<h1 style='text-align: center;'>🧠 Psicobot</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center;'>Asistente Académico Integral</p>", unsafe_allow_html=True)
 
 contexto_contenido = cargar_informacion()
 
 # --- LÓGICA DE CONSULTA ---
-pregunta = st.text_input("¿En qué puedo ayudarte?", placeholder="Consulta sobre la carrera o el seminario...")
+pregunta = st.text_input("¿En qué puedo ayudarte?", placeholder="Consulta sobre fechas de cualquier semestre...")
 
 if st.button("Consultar"):
     if pregunta:
-        if not contexto_contenido:
-            st.error("⚠️ Atención: El bot no está detectando contenido en los archivos PDF.")
-        
-        with st.spinner("Buscando en la base de datos..."):
+        with st.spinner("Analizando calendarios y reglamentos..."):
             try:
                 modelos = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
                 nombre_modelo = "models/gemini-1.5-flash" if "models/gemini-1.5-flash" in modelos else modelos[0]
                 model = genai.GenerativeModel(nombre_modelo)
                 
-                filtros = {
+                filtros_seguridad = {
                     HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
                     HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
                     HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
                     HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
                 }
 
-                instrucciones = (
-                    "Eres Psicobot, el asistente oficial. Tu conocimiento viene de los documentos cargados. "
+                instrucciones_sistema = (
+                    "Eres Psicobot, el asistente oficial de la Facultad de Psicología. "
+                    "Tienes acceso a los calendarios de clases desde 1er a 10mo semestre del año 2026. "
                     "REGLAS:\n"
-                    "1. NO menciones que lees PDFs o archivos.\n"
-                    "2. Si la info está en un reglamento, CITA el artículo (ej: Art. 5).\n"
-                    "3. Responde con seguridad sobre la carrera de psicología y el cierre de seminario.\n"
-                    "4. Si no sabes algo, dilo amablemente."
+                    "1. NO menciones que lees archivos o PDFs.\n"
+                    "2. Si te preguntan por fechas, identifica primero a qué semestre corresponde la consulta.\n"
+                    "3. Cita siempre el número de artículo si respondes sobre reglamentos.\n"
+                    "4. Si la información no está en los archivos, indica que no tienes el dato para ese semestre específico."
                 )
 
-                # Enviamos el contexto completo (Gemini 1.5 Flash soporta mucho texto)
-                prompt_final = f"{instrucciones}\n\nCONTEXTO INSTITUCIONAL:\n{contexto_contenido}\n\nPREGUNTA: {pregunta}"
+                prompt_final = f"{instrucciones_sistema}\n\nCONTEXTO:\n{contexto_contenido}\n\nPREGUNTA: {pregunta}"
 
-                response = model.generate_content(prompt_final, safety_settings=filtros)
+                response = model.generate_content(prompt_final, safety_settings=filtros_seguridad)
                 
                 if response.text:
                     st.markdown("---")
                     st.info(response.text)
             except Exception as e:
-                st.error(f"Error técnico: {str(e)}")
+                st.error("Error de conexión. Intenta nuevamente.")
     else:
-        st.warning("Por favor, ingresa una pregunta.")
+        st.warning("Escribe una pregunta.")
+
+st.markdown("---")
+st.caption("Psicobot v1.6 - Base de datos completa 2026-1")
