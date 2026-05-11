@@ -3,73 +3,81 @@ import fitz  # PyMuPDF
 import google.generativeai as genai
 import os
 
-# 1. Configuración de API Key (Secrets de Streamlit)
-api_key = st.secrets["GOOGLE_API_KEY"]
-genai.configure(api_key=api_key)
+# 1. Configuración de API Key (Seguridad)
+if "GOOGLE_API_KEY" in st.secrets:
+    genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
+else:
+    st.error("Falta la clave GOOGLE_API_KEY en los Secrets de Streamlit.")
 
 st.set_page_config(page_title="Psicobot", page_icon="🧠")
 
-# 2. Función Optimizada: Solo lee los archivos UNA VEZ (Caché)
+# 2. CARGA INTELIGENTE DE TEXTO (Optimizado para velocidad)
 @st.cache_resource
-def obtener_contexto():
+def obtener_contexto_mejorado():
     texto_acumulado = ""
     archivos = ["Doc1base.pdf", "Reunión 2026-1 1.pdf", "Calendario semi.pdf"]
+    encontrados = 0
     for nombre in archivos:
         if os.path.exists(nombre):
             try:
                 doc = fitz.open(nombre)
                 for pagina in doc:
-                    texto_acumulado += pagina.get_text()
-            except Exception:
-                continue
-    return texto_acumulado
+                    texto_acumulado += pagina.get_text("text") + "\n"
+                doc.close()
+                encontrados += 1
+            except Exception as e:
+                print(f"Error leyendo {nombre}: {e}")
+    return texto_acumulado if encontrados > 0 else None
 
-# 3. Diseño de Interfaz
+# --- INTERFAZ ---
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
     if os.path.exists("logo.png"):
         st.image("logo.png", use_container_width=True)
 
 st.markdown("<h1 style='text-align: center;'>🧠 Psicobot</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center;'>Asistente Virtual de la Facultad de Psicología</p>", unsafe_allow_html=True)
-st.markdown("---")
+st.markdown("<p style='text-align: center; color: gray;'>Asistente de la Facultad de Psicología</p>", unsafe_allow_html=True)
 
-# Cargar el contexto (esto será instantáneo después de la primera vez)
-contexto_documentos = obtener_contexto()
+# Cargamos el contenido una sola vez
+contexto_full = obtener_contexto_mejorado()
 
-if contexto_documentos:
-    st.write("👋 **¡Hola! Soy Psicobot.** ¿En qué puedo ayudarte hoy?")
+if not contexto_full:
+    st.error("⚠️ No se pudieron leer los archivos PDF. Verifica que estén en GitHub.")
+else:
+    pregunta = st.text_input("Haz tu pregunta:", placeholder="Ej: ¿Cuándo terminan las clases?")
     
-    # Campo de pregunta
-    pregunta_usuario = st.text_input("Escribe tu consulta:", placeholder="Ej: ¿Cuándo es el próximo examen?")
-    
-    if st.button("Consultar a Psicobot"):
-        if pregunta_usuario:
-            with st.spinner("Psicobot está pensando..."):
+    if st.button("Preguntar a Psicobot"):
+        if pregunta:
+            # Creamos un espacio vacío para la respuesta
+            contenedor_respuesta = st.empty()
+            with st.spinner("🔍 Psicobot está buscando en los reglamentos..."):
                 try:
-                    # Configurar el modelo de IA
+                    # Usamos el modelo más rápido
                     model = genai.GenerativeModel("gemini-1.5-flash")
                     
-                    # Instrucciones de personalidad
-                    prompt_instrucciones = (
-                        "Eres Psicobot, el asistente oficial de la Facultad de Psicología. "
-                        "Responde de forma amable, empática y muy profesional. "
-                        "Usa EXCLUSIVAMENTE la información de los documentos proporcionados. "
-                        "No menciones que lees archivos PDF ni nombres de documentos. "
-                        "Si la información no está en los documentos, indícalo amablemente."
+                    config_prompt = (
+                        "Eres Psicobot, asistente oficial de la Facultad de Psicología. "
+                        "Responde de forma breve, amable y profesional. "
+                        "Básate SOLO en este texto:\n\n"
                     )
                     
-                    # Generar respuesta
-                    respuesta = model.generate_content(
-                        f"{prompt_instrucciones}\n\nContexto:\n{contexto_documentos}\n\nPregunta: {pregunta_usuario}"
-                    )
+                    # Llamada a la IA
+                    response = model.generate_content(f"{config_prompt}{contexto_full}\n\nPregunta: {pregunta}")
                     
-                    st.markdown("### 📝 Respuesta:")
-                    st.info(respuesta.text)
-                    
+                    # Mostramos el resultado
+                    if response.text:
+                        contenedor_respuesta.success(response.text)
+                    else:
+                        contenedor_respuesta.warning("La IA no pudo generar una respuesta clara.")
+                        
                 except Exception as e:
-                    st.error("Lo siento, hubo un pequeño error técnico. Intenta de nuevo en unos segundos.")
+                    error_msg = str(e)
+                    if "429" in error_msg:
+                        st.error("⏳ Demasiadas preguntas seguidas. Espera 60 segundos.")
+                    else:
+                        st.error(f"❌ Error técnico: {error_msg}")
         else:
-            st.warning("Por favor, escribe una pregunta primero.")
-else:
-    st.error("⚠️ No se encontraron los archivos PDF en el servidor. Revisa tu GitHub.")
+            st.warning("Escribe algo antes de preguntar.")
+
+st.markdown("---")
+st.caption("Psicobot v1.2 - Desarrollado para la Facultad de Psicología")
