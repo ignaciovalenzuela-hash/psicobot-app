@@ -3,9 +3,15 @@ import google.generativeai as genai
 import fitz  # Para los PDFs
 import pandas as pd  # Para el Excel/CSV
 import os
+import unicodedata
 
 # --- 1. CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Psicobot", page_icon="🧠", layout="centered")
+
+# Función auxiliar para limpiar acentos y espacios de los encabezados del Excel
+def normalizar_columna(col):
+    col = str(col).strip().upper()
+    return ''.join(ch for ch in unicodedata.normalize('NFD', col) if unicodedata.category(ch) != 'Mn')
 
 # --- 2. LOGO Y ENCABEZADO ---
 col1, col2, col3 = st.columns([1, 1.2, 1])
@@ -30,10 +36,11 @@ else:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# --- 5. CARGA INTELIGENTE DE REGLAMENTOS Y HORARIOS ---
+# --- 5. CARGA ULTRA ROBUSTA DE REGLAMENTOS Y HORARIOS ---
 @st.cache_resource(show_spinner=False)
 def cargar_documentos():
     texto_total = ""
+    archivos_procesados_exitosamente = []
     
     # Lista negra de archivos excluidos
     archivos_excluidos = {
@@ -50,42 +57,67 @@ def cargar_documentos():
         if a in archivos_excluidos:
             continue
             
-        # --- PROCESAR REGLAMENTOS O TEXTOS (PDFs) ---
-        if a.endswith('.pdf'):
+        # --- PROCESAR HORARIOS SEMIPRESENCIAL (CSV/Excel) ---
+        # Los procesamos primero para asegurar su prioridad en el texto
+        if a.endswith('.csv'):
+            df = None
+            # Probamos múltiples codificaciones para evitar caídas por tildes (Ó, Í)
+            for encoding_opt in ['utf-8', 'latin-1', 'utf-8-sig', 'cp1252']:
+                try:
+                    df = pd.read_csv(a, encoding=encoding_opt)
+                    break
+                except:
+                    continue
+            
+            if df is not None:
+                archivos_procesados_exitosamente.append(f"📊 Excel Horarios: {a}")
+                texto_total += f"\n\n--- INICIO BASE DE DATOS HORARIOS PRESENCIALES SEMIPRESENCIAL: {a} ---\n"
+                
+                # Normalizamos las columnas (quita espacios y tildes: SECCIÓN -> SECCION)
+                df.columns = [normalizar_columna(c) for c in df.columns]
+                
+                for index, fila in df.iterrows():
+                    fecha_raw = str(fila.get('FECHA DE LA CLASE', fila.get('FECHAS DE LA CLASE', '')))
+                    fecha_limpia = fecha_raw.split(' ')[0] if ' ' in fecha_raw else fecha_raw
+                    
+                    texto_total += (
+                        f"Asignatura: {fila.get('ASIGNATURAS', fila.get('ASIGNATURA', ''))} ({fila.get('CODIGO DE ASIGNATURAS', '')}) | "
+                        f"Seccion: {fila.get('SECCION', '')} | "
+                        f"Docente: {fila.get('NOMBRES DOCENTE', '')} {fila.get('APELLIDO PATERNO DOCENTE', '')} {fila.get('APELLIDO MATERNO DOCENTE', '')} | "
+                        f"Dia de la semana: {fila.get('DIA', '')} | "
+                        f"Fecha: {fecha_limpia} | "
+                        f"Horario: {fila.get('HORA INICIO DE LA CLASE', '')} a {fila.get('HORA FINALIZACION DE LA CLASE', '')} | "
+                        f"Sala: {fila.get('CODIGO DE SALA DE CLASES', fila.get('SALA', ''))} | "
+                        f"Semestre: {fila.get('SEMESTRE', '')}\n"
+                    )
+                texto_total += f"--- FIN BASE DE DATOS HORARIOS SEMIPRESENCIAL ---\n"
+            
+        # --- PROCESAR REGLAMENTOS (PDFs) ---
+        elif a.endswith('.pdf'):
             try:
                 with fitz.open(a) as doc:
                     for pagina in doc:
                         texto_total += f"\n\n--- INICIO DOCUMENTO: {a} ---\n"
                         texto_total += pagina.get_text()
                         texto_total += f"\n--- FIN DOCUMENTO: {a} ---\n"
-            except: continue
+                archivos_procesados_exitosamente.append(f"📄 Documento PDF: {a}")
+            except: 
+                continue
             
-        # --- PROCESAR HORARIOS SEMIPRESENCIAL (CSV/Excel) ---
-        elif a.endswith('.csv'):
-            try:
-                df = pd.read_csv(a)
-                texto_total += f"\n\n--- INICIO BASE DE DATOS HORARIOS PRESENCIALES SEMIPRESENCIAL: {a} ---\n"
-                for index, fila in df.iterrows():
-                    # Limpiamos la fecha para quitar las horas ceros si vienen del Excel
-                    fecha_raw = str(fila.get('FECHAS DE LA CLASE', fila.get('FECHA DE LA CLASE', '')))
-                    fecha_limpia = fecha_raw.split(' ')[0] if ' ' in fecha_raw else fecha_raw
-                    
-                    texto_total += (
-                        f"Asignatura: {fila.get('ASIGNATURAS', '')} ({fila.get('CODIGO DE ASIGNATURAS', '')}) | "
-                        f"Sección: {fila.get('SECCIÓN', '')} | "
-                        f"Docente: {fila.get('NOMBRES DOCENTE', '')} {fila.get('APELLIDO PATERNO DOCENTE', '')} {fila.get('APELLIDO MATERNO DOCENTE', '')} | "
-                        f"Día de la semana: {fila.get('DÍA', '')} | "
-                        f"Fecha: {fecha_limpia} | "
-                        f"Horario: {fila.get('HORA INICIO DE LA CLASE', '')} a {fila.get('HORA FINALIZACIÓN DE LA CLASE', '')} | "
-                        f"Sala: {fila.get('CODIGO DE SALA DE CLASES', '')} | "
-                        f"Semestre: {fila.get('SEMESTRE', '')}\n"
-                    )
-                texto_total += f"--- FIN BASE DE DATOS HORARIOS SEMIPRESENCIAL ---\n"
-            except: continue
-            
-    return texto_total
+    return texto_total, archivos_procesados_exitosamente
 
-contexto_facultad = cargar_documentos()
+# Ejecutamos la carga
+contexto_facultad, archivos_activos = cargar_documentos()
+
+# --- 5.1 BARRA LATERAL DE CONTROL INTERNO ---
+with st.sidebar:
+    st.subheader("📁 Sistema de Archivos Activo")
+    st.write("Verifica qué documentos está leyendo Psicobot actualmente:")
+    if archivos_activos:
+        for arch in archivos_activos:
+            st.success(arch)
+    else:
+        st.error("⚠️ No se ha detectado ningún archivo PDF o CSV en la raíz de tu GitHub.")
 
 # --- 6. VISUALIZACIÓN DEL HISTORIAL EN PANTALLA ---
 for message in st.session_state.messages:
@@ -94,7 +126,6 @@ for message in st.session_state.messages:
 
 # --- 7. LÓGICA DE PREGUNTAS Y RESPUESTAS ---
 if prompt := st.chat_input("Escribe tu duda aquí..."):
-    # Mostrar y registrar pregunta actual del usuario
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -107,42 +138,41 @@ if prompt := st.chat_input("Escribe tu duda aquí..."):
             model = genai.GenerativeModel(
                 model_name=nombre_modelo,
                 generation_config={
-                    "temperature": 0.0, # Volvemos a 0.0 para evitar cualquier desvío de formato
+                    "temperature": 0.0, 
                     "max_output_tokens": 2048,
                 }
             )
             
-            # INSTRUCCIONES ULTRA ESTRICTAS DE ENRUTAMIENTO Y FORMATO
+            # INSTRUCCIONES FORMATEADAS AL DETALLE SOLICITADO
             instrucciones = (
-                "Eres Psicobot, un tutor académico experto y empático de la carrera de Psicología.\n\n"
-                "REGLA 1: FILTRO OBLIGATORIO DE MODALIDAD\n"
-                "Si el estudiante pregunta por fechas de clases, horarios, o asignaturas de un semestre (ej. '¿cuándo son las clases presenciales de semipresencial?', '¿cuándo son las clases de X semestre?', '¿cuándo tengo clases de X materia?'):\n"
-                "- DEBES verificar si en su pregunta actual O en el HISTORIAL DE LA CONVERSACIÓN ya se especificó la palabra 'semipresencial'.\n"
-                "- Si NO se ha especificado la modalidad, NO entregues ninguna fecha. Detén la respuesta y pregunta amablemente: '¡Hola! Para darte el dato exacto, ¿me podrías confirmar para qué modalidad necesitas saber esto?'.\n\n"
-                "REGLA 2: FORMATO EXCLUSIVO PARA SEMIPRESENCIAL\n"
-                "Si se detecta que es para la modalidad 'semipresencial', busca los datos en la 'BASE DE DATOS HORARIOS PRESENCIALES SEMIPRESENCIAL' y devuelve la información de las fechas utilizando ESTRICTAMENTE el siguiente formato (Respeta los saltos de línea exactos, NO uses viñetas como '*' ni '-'):\n\n"
+                "Eres Psicobot, un tutor académico experto y muy cercano para la carrera de Psicología.\n\n"
+                "REGLA 1: FILTRO DE MODALIDAD OBLIGATORIO\n"
+                "Si el estudiante pregunta por fechas de clases presenciales, horarios, o asignaturas de un semestre (ej. '¿cuándo son las clases presenciales de semipresencial?', '¿cuándo son las clases de 4to semestre?'):\n"
+                "- Revisa si en su pregunta o en el HISTORIAL de la conversación ya se ha aclarado explícitamente el término 'semipresencial'.\n"
+                "- Si NO se ha mencionado la modalidad, detén la entrega de datos y di exactamente: '¡Hola! Para darte la información exacta de tus jornadas, ¿me podrías confirmar para qué modalidad necesitas saber esto?'.\n\n"
+                "REGLA 2: FORMATO ESTRICTO DE ENTREGA (MÁXIMA PRIORIDAD)\n"
+                "Si se confirma la modalidad semipresencial, busca en la 'BASE DE DATOS HORARIOS PRESENCIALES SEMIPRESENCIAL'. Debes entregar la información usando de forma milimétrica la siguiente estructura (Respeta los saltos de línea exactos, NO uses viñetas como '*' ni '-'):\n\n"
                 "📅 [Día de la semana] [Día] de [Mes] de [Año]\n\n"
                 "🕒 Horario: [Hora Inicio] a [Hora Fin] hrs.\n"
                 "📍 Sala: [Sala]\n"
                 "👨‍🏫 Docente: [Nombre Completo del Docente]\n\n"
-                "Ejemplo de salida exacta requerida:\n"
+                "EJEMPLO DE SALIDA EXACTA REQUERIDA:\n"
                 "📅 Sábado 28 de marzo de 2026\n\n"
                 "🕒 Horario: 11:05 a 14:05 hrs.\n"
                 "📍 Sala: CCC302\n"
                 "👨‍🏫 Docente: Marila Del Carmen García Puelpan\n\n"
-                "Si la asignatura tiene múltiples fechas presenciales en esa sección/semestre, colócalas una abajo de la otra siguiendo este mismo patrón estructural."
+                "Si la asignatura o el semestre consultado contiene múltiples fechas asignadas, pon un bloque abajo del otro separados por un salto de línea."
             )
 
-            # Construimos el texto del historial para que el modelo tenga memoria real
             historial_contexto = ""
             for msg in st.session_state.messages[:-1]:
                 rol = "Estudiante" if msg["role"] == "user" else "Psicobot"
                 historial_contexto += f"{rol}: {msg['content']}\n"
 
-            # Prompt unificado definitivo
+            # Ampliamos el rango de lectura a 300,000 caracteres para evitar recortes accidentales
             full_prompt = (
                 f"{instrucciones}\n\n"
-                f"CONTEXTO DE LA FACULTAD:\n{contexto_facultad[:100000]}\n\n"
+                f"CONTEXTO DE LA FACULTAD:\n{contexto_facultad[:300000]}\n\n"
                 f"HISTORIAL DE LA CONVERSACIÓN:\n{historial_contexto}\n"
                 f"PREGUNTA ACTUAL DEL ESTUDIANTE: {prompt}"
             )
