@@ -1,7 +1,7 @@
 import streamlit as st
 import google.generativeai as genai
 import fitz  # Para los PDFs
-import pandas as pd  # Para el Excel/CSV
+import pandas as pd  # Para el Excel (.xlsx y .csv)
 import os
 import unicodedata
 
@@ -32,7 +32,7 @@ else:
     st.error("Error: Configura la API Key en los Secrets.")
     st.stop()
 
-# --- 4. MEMORIA DEL CHAT (Inicialización) ---
+# --- 4. MEMORIA DEL CHAT ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -42,7 +42,6 @@ def cargar_documentos():
     texto_total = ""
     archivos_procesados_exitosamente = []
     
-    # Lista negra de archivos excluidos
     archivos_excluidos = {
         "Calendario 10mo semestre 2026-1.pdf", "Calendario 1er semestre 2026-1.pdf",
         "Calendario 2do semestre 2026-1.pdf", "Calendario 3er semestre 2026-1.pdf",
@@ -57,23 +56,27 @@ def cargar_documentos():
         if a in archivos_excluidos:
             continue
             
-        # --- PROCESAR HORARIOS SEMIPRESENCIAL (CSV/Excel) ---
-        # Los procesamos primero para asegurar su prioridad en el texto
-        if a.endswith('.csv'):
+        # --- PROCESAR HORARIOS SEMIPRESENCIAL (Soporta .xlsx, .xls y .csv) ---
+        if a.endswith('.xlsx') or a.endswith('.xls') or a.endswith('.csv'):
             df = None
-            # Probamos múltiples codificaciones para evitar caídas por tildes (Ó, Í)
-            for encoding_opt in ['utf-8', 'latin-1', 'utf-8-sig', 'cp1252']:
-                try:
-                    df = pd.read_csv(a, encoding=encoding_opt)
-                    break
-                except:
-                    continue
+            try:
+                if a.endswith('.csv'):
+                    for encoding_opt in ['utf-8', 'latin-1', 'utf-8-sig', 'cp1252']:
+                        try:
+                            df = pd.read_csv(a, encoding=encoding_opt)
+                            break
+                        except: continue
+                else:
+                    # Lee formato Excel tradicional (.xlsx)
+                    df = pd.read_excel(a)
+            except:
+                continue
             
             if df is not None:
                 archivos_procesados_exitosamente.append(f"📊 Excel Horarios: {a}")
                 texto_total += f"\n\n--- INICIO BASE DE DATOS HORARIOS PRESENCIALES SEMIPRESENCIAL: {a} ---\n"
                 
-                # Normalizamos las columnas (quita espacios y tildes: SECCIÓN -> SECCION)
+                # Estandarizamos encabezados (Quita tildes y pasa a mayúsculas)
                 df.columns = [normalizar_columna(c) for c in df.columns]
                 
                 for index, fila in df.iterrows():
@@ -109,17 +112,17 @@ def cargar_documentos():
 # Ejecutamos la carga
 contexto_facultad, archivos_activos = cargar_documentos()
 
-# --- 5.1 BARRA LATERAL DE CONTROL INTERNO ---
+# --- 5.1 BARRA LATERAL DE VERIFICACIÓN ---
 with st.sidebar:
     st.subheader("📁 Sistema de Archivos Activo")
-    st.write("Verifica qué documentos está leyendo Psicobot actualmente:")
+    st.write("Documentos que Psicobot está leyendo en vivo:")
     if archivos_activos:
         for arch in archivos_activos:
             st.success(arch)
     else:
-        st.error("⚠️ No se ha detectado ningún archivo PDF o CSV en la raíz de tu GitHub.")
+        st.error("⚠️ No se han detectado archivos compatibles en la raíz de tu GitHub.")
 
-# --- 6. VISUALIZACIÓN DEL HISTORIAL EN PANTALLA ---
+# --- 6. VISUALIZACIÓN DEL HISTORIAL ---
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
@@ -143,7 +146,6 @@ if prompt := st.chat_input("Escribe tu duda aquí..."):
                 }
             )
             
-            # INSTRUCCIONES FORMATEADAS AL DETALLE SOLICITADO
             instrucciones = (
                 "Eres Psicobot, un tutor académico experto y muy cercano para la carrera de Psicología.\n\n"
                 "REGLA 1: FILTRO DE MODALIDAD OBLIGATORIO\n"
@@ -169,7 +171,6 @@ if prompt := st.chat_input("Escribe tu duda aquí..."):
                 rol = "Estudiante" if msg["role"] == "user" else "Psicobot"
                 historial_contexto += f"{rol}: {msg['content']}\n"
 
-            # Ampliamos el rango de lectura a 300,000 caracteres para evitar recortes accidentales
             full_prompt = (
                 f"{instrucciones}\n\n"
                 f"CONTEXTO DE LA FACULTAD:\n{contexto_facultad[:300000]}\n\n"
