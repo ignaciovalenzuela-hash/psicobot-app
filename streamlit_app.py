@@ -29,16 +29,38 @@ else:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# --- 5. CARGA DE DOCUMENTOS (Cache inteligente) ---
+# --- 5. CARGA DE DOCUMENTOS CON FILTRO ESTRICTO ---
 @st.cache_resource(show_spinner=False)
 def cargar_documentos():
     texto_total = ""
+    
+    # LISTA NEGRA: Archivos que el bot ignorará por completo
+    archivos_excluidos = {
+        "Calendario 10mo semestre 2026-1.pdf",
+        "Calendario 1er semestre 2026-1.pdf",
+        "Calendario 2do semestre 2026-1.pdf",
+        "Calendario 3er semestre 2026-1.pdf",
+        "Calendario 4to semestre 2026-1.pdf",
+        "Calendario 5to semestre 2026-1.pdf",
+        "Calendario 6to semestre 2026-1.pdf",
+        "Calendario 7mo semestre 2026-1.pdf",
+        "Calendario 8vo semestre 2026-1.pdf",
+        "Calendario 9no semestre 2026-1.pdf"
+    }
+    
     archivos = [f for f in os.listdir() if f.endswith('.pdf')]
     for a in archivos:
+        # Si el archivo está en la lista negra, lo saltamos
+        if a in archivos_excluidos:
+            continue
+            
         try:
             with fitz.open(a) as doc:
                 for pagina in doc:
-                    texto_total += f"\n\n[ARCHIVO: {a}]\n" + pagina.get_text()
+                    # Enmarcamos el texto indicando claramente de qué archivo viene
+                    texto_total += f"\n\n--- INICIO DOCUMENTO: {a} ---\n"
+                    texto_total += pagina.get_text()
+                    texto_total += f"\n--- FIN DOCUMENTO: {a} ---\n"
         except:
             continue
     return texto_total
@@ -61,26 +83,28 @@ if prompt := st.chat_input("¿Qué deseas consultar hoy?"):
             modelos_disponibles = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
             nombre_modelo = next((m for m in modelos_disponibles if "flash" in m), modelos_disponibles[0])
             
-            # Ajustamos la configuración para permitir respuestas más largas
             model = genai.GenerativeModel(
                 model_name=nombre_modelo,
                 generation_config={
-                    "temperature": 0.1,
-                    "max_output_tokens": 2048, # Aumentado para evitar cortes
+                    "temperature": 0.0,  # Reducido a 0 para máxima precisión (cero creatividad)
+                    "max_output_tokens": 2048,
                 }
             )
             
+            # INSTRUCCIONES MEJORADAS PARA ULTRA PRECISIÓN
             instrucciones = (
-                "Eres Psicobot. Debes ser exhaustivo y dar la información COMPLETA.\n"
-                "Si encuentras una asignatura, responde con este formato:\n"
-                "- **Periodo de dictación:** (fechas)\n"
-                "- **Clases Presenciales:** (días y fechas exactas)\n"
-                "- **Horario y Sala:** (detalles)\n"
-                "- **Modalidad:** (Online/Presencial)\n"
-                "Usa negritas para que la información destaque."
+                "Eres Psicobot, un asistente académico de precisión quirúrgica para la carrera de Psicología.\n\n"
+                "INSTRUCCIONES DE RAZONAMIENTO ANTES DE RESPONDER:\n"
+                "1. Lee la pregunta del alumno e identifica qué asignatura o tema busca.\n"
+                "2. Busca en el CONTEXTO el documento exacto que contiene esa información (fíjate en las etiquetas --- INICIO DOCUMENTO ---).\n"
+                "3. Si encuentras los datos, extrae TODO sin resumir de más: Periodos de clases, días exactos (si es sábado, indica cuál), horas exactas, modalidad (Online/Presencial) y salas.\n"
+                "4. Si la información varía según el semestre, aclara a qué documento/reglamento estás indexando tu respuesta.\n"
+                "5. Si el dato NO está explícito en el texto actual, di textualmente: 'No dispongo de ese registro exacto en la documentación actual'. No intentes adivinar ni generalizar.\n\n"
+                "FORMATO OBLIGATORIO DE RESPUESTA:\n"
+                "Presenta los datos usando viñetas bien estructuradas y destaca los horarios y fechas clave en **negrita**."
             )
 
-            full_prompt = f"{instrucciones}\n\nCONTEXTO:\n{contexto_facultad[:100000]}\n\nPREGUNTA: {prompt}"
+            full_prompt = f"{instrucciones}\n\nCONTEXTO AUTORIZADO DE LA FACULTAD:\n{contexto_facultad[:110000]}\n\nPREGUNTA DEL ESTUDIANTE: {prompt}"
             
             response = model.generate_content(full_prompt)
             
