@@ -8,10 +8,9 @@ import unicodedata
 # --- 1. CONFIGURACIÓN DE PÁGINA Y ESTILOS VISUALES (CSS) ---
 st.set_page_config(page_title="Psicobot", page_icon="🧠", layout="centered")
 
-# Inyección de CSS para limpiar la interfaz y darle look de App
+# Inyección de CSS para limpiar la interfaz
 st.markdown("""
 <style>
-    /* Ocultar el menú superior y el footer de Streamlit */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
@@ -49,20 +48,9 @@ else:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# --- 4. CONFIGURACIÓN DEL MODELO DE ÚLTIMA GENERACIÓN (MÁXIMA VELOCIDAD) ---
-@st.cache_resource(show_spinner=False)
-def obtener_modelo_flash_activo():
-    try:
-        modelos_disponibles = list(genai.list_models())
-        for m in modelos_disponibles:
-            if 'generateContent' in m.supported_generation_methods and 'flash' in m.name.lower():
-                return m.name
-    except:
-        pass
-    # Forzamos por defecto el modelo de la serie 2.5 de Google
-    return 'models/gemini-2.5-flash'
-
-nombre_modelo_oficial = obtener_modelo_flash_activo()
+# --- 4. CONFIGURACIÓN DEL MODELO ULTRA-RÁPIDO (8B) ---
+# Forzamos el uso del modelo más ligero y veloz de Google
+nombre_modelo_oficial = 'models/gemini-1.5-flash-8b'
 
 # --- 5. CARGA DE DATOS DESDE EL REPOSITORIO ---
 @st.cache_resource(show_spinner=False)
@@ -112,34 +100,32 @@ def cargar_documentos():
 
 contexto_facultad, archivos_activos = cargar_documentos()
 
-# --- 6. INSTRUCCIONES DE SISTEMA CON CONTROL DE MODALIDAD Y FORMATO BLINDADO ---
+# --- 6. INSTRUCCIONES DE SISTEMA ---
 instrucciones_base = (
     "Eres Psicobot, el asistente oficial integral de la Escuela de Psicología.\n"
     "Tu objetivo es dar respuestas PRECISAS, DIRECTAS Y CONCISAS, usando emojis y negritas, sin saludos ni despedidas largas.\n\n"
     "REGLA 0: FILTRO OBLIGATORIO DE MODALIDAD (CRÍTICA)\n"
-    "- En la carrera existen dos modalidades principales: 1) Presencial (que se divide en Diurno y Vespertino) y 2) Semipresencial.\n"
-    "- Antes de responder CUALQUIER consulta de horarios o de lineamientos administrativos, revisa el historial. Si el alumno NO ha mencionado de forma explícita a qué modalidad pertenece, debes detenerte inmediatamente y pedirle que te lo indique. \n"
-    "- Haz la pregunta de forma muy breve, por ejemplo: 'Para entregarte la información correcta, ¿a qué modalidad perteneces? (Presencial Diurno, Presencial Vespertino o Semipresencial)'.\n"
-    "- Si el alumno ya lo mencionó o lo deduces con total certeza por los datos provistos (ej. si da una sección semipresencial), procede con las siguientes reglas.\n\n"
-    "REGLA 1: CLASIFICACIÓN DE LA CONSULTA (UNA VEZ SABIENDO LA MODALIDAD)\n"
+    "- En la carrera existen dos modalidades principales: 1) Presencial (Diurno y Vespertino) y 2) Semipresencial.\n"
+    "- Antes de responder CUALQUIER consulta, revisa el historial. Si el alumno NO ha mencionado a qué modalidad pertenece, detente y pídele que te lo indique: 'Para entregarte la información correcta, ¿a qué modalidad perteneces? (Presencial Diurno, Presencial Vespertino o Semipresencial)'.\n"
+    "- Si el alumno ya lo mencionó o se deduce claramente, procede.\n\n"
+    "REGLA 1: CLASIFICACIÓN DE LA CONSULTA\n"
     "ESCENARIO A: CONSULTA GENERAL DE HORARIOS DE CLASE\n"
     "- Requieres OBLIGATORIAMENTE el SEMESTRE y SECCIÓN. Pídelos brevemente si faltan.\n"
-    "- Muestra exclusivamente las materias correspondientes usando el FORMATO VISUAL ESTRICTO.\n\n"
     "ESCENARIO B: CONSULTA DE UNA ASIGNATURA Y SECCIÓN ESPECÍFICA\n"
-    "- Responde de inmediato sin pedir semestre usando el FORMATO VISUAL ESTRICTO.\n\n"
+    "- Responde de inmediato sin pedir semestre.\n"
     "ESCENARIO C: CONSULTA GENERAL O ADMINISTRATIVA\n"
-    "- Responde de forma directa basándote en los documentos. CRÍTICO: Aplica el reglamento específico según la modalidad del alumno (ej: recuerda que la eximición de exámenes aplica SOLO a la modalidad presencial y NO a la semipresencial).\n\n"
-    "REGLA 2: FORMATO VISUAL PARA HORARIOS (SOLO ESCENARIOS A Y B - ESTRICTO)\n"
-    "Para evitar que las materias se junten en la misma línea, debes estructurar la lista dejando obligatoriamente una línea en blanco (doble salto de línea) entre el final de una asignatura y el inicio de la siguiente. Sigue este ejemplo exacto de espaciado:\n\n"
+    "- Responde de forma directa basándote en los documentos. Aplica el reglamento específico según la modalidad del alumno.\n\n"
+    "REGLA 2: FORMATO VISUAL PARA HORARIOS (ESTRICTO)\n"
+    "Asegura un doble salto de línea obligatorio entre el final de una asignatura y el inicio de la siguiente:\n\n"
     "🧠 **ELEMENTOS DE NEUROCIENCIA**:\n"
     "* 🗓️ **DOMINGO 26-04-26** | ⏰ de **14:30** a **19:30** horas\n\n"
     "📊 **METODOLOGÍA CUANTITATIVA DE INVESTIGACIÓN**:\n"
     "* 🗓️ **SABADO 25-04-26** | ⏰ de **14:30** a **16:55** horas\n"
     "* 🗓️ **SABADO 30-05-26** | ⏰ de **14:30** a **17:40** horas\n\n"
-    "REGLA CRÍTICA DE ESPACIADO: Jamás coloques el nombre o el emoji de una nueva asignatura en la misma línea donde termina el horario de la materia anterior. Cada materia debe iniciar obligatoriamente al principio de un renglón completamente limpio."
+    "REGLA CRÍTICA: Cada materia debe iniciar al principio de un renglón limpio."
 )
 
-# --- 7. PANTALLA DE BIENVENIDA (Aparece solo si no hay mensajes) ---
+# --- 7. PANTALLA DE BIENVENIDA ---
 if not st.session_state.messages:
     st.markdown("<h3 style='text-align: center; color: #2e6c80;'>¡Hola! Estoy aquí para ayudarte 🤖</h3>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center;'>Puedes preguntarme sobre tus horarios o procesos de la carrera.</p>", unsafe_allow_html=True)
@@ -151,7 +137,7 @@ if not st.session_state.messages:
         st.info("📋 **Dudas Administrativas**\n\nEjemplo: *'Soy de Presencial Diurno, ¿me puedo eximir de los exámenes finales?'*")
     st.markdown("<br>", unsafe_allow_html=True)
 
-# --- 8. VISUALIZACIÓN DEL CHAT CON AVATARES Y MENSAJE DE ESPERA ---
+# --- 8. VISUALIZACIÓN DEL CHAT CON STREAMING ---
 for message in st.session_state.messages:
     avatar_icon = "🎓" if message["role"] == "user" else "🧠"
     with st.chat_message(message["role"], avatar=avatar_icon):
@@ -163,30 +149,38 @@ if prompt := st.chat_input("Escribe tu duda aquí..."):
         st.markdown(prompt)
 
     with st.chat_message("assistant", avatar="🧠"):
-        # Mensaje dinámico mientras la IA genera la respuesta
-        with st.spinner("Preparando respuesta..."):
-            try:
-                historial_contexto = ""
-                for msg in st.session_state.messages[:-1]:
-                    rol = "Estudiante" if msg["role"] == "user" else "Psicobot"
-                    historial_contexto += f"{rol}: {msg['content']}\n"
+        try:
+            historial_contexto = ""
+            for msg in st.session_state.messages[:-1]:
+                rol = "Estudiante" if msg["role"] == "user" else "Psicobot"
+                historial_contexto += f"{rol}: {msg['content']}\n"
+            
+            model = genai.GenerativeModel(model_name=nombre_modelo_oficial)
+            
+            full_prompt = (
+                f"{instrucciones_base}\n\n"
+                f"REPOSITORIO DE DATOS DE LA CARRERA:\n{contexto_facultad}\n\n"
+                f"HISTORIAL DE LA CONVERSACIÓN:\n{historial_contexto}\n"
+                f"ESTUDIANTE: {prompt}"
+            )
+            
+            # Activamos el streaming (stream=True) para que el texto aparezca de inmediato
+            response = model.generate_content(full_prompt, generation_config={"temperature": 0.1}, stream=True)
+            
+            # Contenedor vacío donde se irá escribiendo el texto en vivo
+            placeholder = st.empty()
+            full_response = ""
+            
+            # Bucle que imprime el texto palabra por palabra en tiempo real
+            for chunk in response:
+                if chunk.text:
+                    full_response += chunk.text
+                    placeholder.markdown(full_response + "▌") # Añade un cursor titilante visual
+            
+            # Quitamos el cursor al final
+            placeholder.markdown(full_response)
+            
+            st.session_state.messages.append({"role": "assistant", "content": full_response})
                 
-                model = genai.GenerativeModel(model_name=nombre_modelo_oficial)
-                
-                full_prompt = (
-                    f"{instrucciones_base}\n\n"
-                    f"REPOSITORIO DE DATOS DE LA CARRERA:\n{contexto_facultad}\n\n"
-                    f"HISTORIAL DE LA CONVERSACIÓN:\n{historial_contexto}\n"
-                    f"ESTUDIANTE: {prompt}"
-                )
-                
-                response = model.generate_content(full_prompt, generation_config={"temperature": 0.1})
-                
-                if response and hasattr(response, 'text') and response.text:
-                    st.markdown(response.text)
-                    st.session_state.messages.append({"role": "assistant", "content": response.text})
-                else:
-                    st.warning("⚠️ El asistente no devolvió una respuesta válida. Intenta reformular.")
-                    
-            except Exception as e:
-                st.error(f"⚠️ Error detallado del sistema: {e}")
+        except Exception as e:
+            st.error(f"⚠️ Error detallado del sistema: {e}")
