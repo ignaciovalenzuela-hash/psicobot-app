@@ -99,7 +99,7 @@ def cargar_documentos():
                 with fitz.open(a) as doc:
                     for pagina in doc:
                         texto_total += pagina.get_text()
-                archivos_procesados.append(f"📄 {a}")
+                archivos_processed.append(f"📄 {a}")
             except: continue
             
     return texto_total, archivos_procesados
@@ -115,10 +115,11 @@ instrucciones_base = (
     "- Para este caso, necesitas OBLIGATORIAMENTE saber el SEMESTRE y la SECCIÓN del alumno.\n"
     "- Si el alumno no menciona de forma explícita AMBOS datos en su mensaje o en el historial, detén el proceso de inmediato.\n"
     "- Pídele amablemente que te indique su semestre (ej. 1er semestre) y su sección (ej. 336).\n"
+    "- NOTA DE CRUCE DE DATOS: En el repositorio, la columna SEMESTRE contiene números puros (ej: '1' para primer semestre, '9' para noveno semestre). Identifica correctamente el número correspondiente.\n"
     "- Una vez obtenidos ambos datos, busca en el repositorio y muestra ÚNICAMENTE las materias que coincidan EXACTAMENTE con ese Semestre y esa Sección.\n\n"
     "ESCENARIO B: CONSULTA DE ASIGNATURA ESPECÍFICA (Ej: '¿cuándo tengo Epistemología sección 336?', 'horario de Introducción sección 334')\n"
     "- Si el alumno pregunta por una asignatura en particular y te proporciona la SECCIÓN, responde DIRECTAMENTE con las fechas de esa materia para esa sección.\n"
-    "- En este escenario NO le pidas el semestre, ya que la combinación de Asignatura + Sección es suficiente para identificar las filas correctas en el repositorio.\n\n"
+    "- En este escenario NO le pidas el semestre, ya que la combinación de Asignatura + Sección es suficiente para filtrar de forma exacta en el repositorio.\n\n"
     "REGLA 2: FORMATO DE SALIDA ESTRICTO POR ASIGNATURA\n"
     "Para cualquiera de los dos escenarios anteriores, al entregar los horarios debes agruparlos por Asignatura usando exactamente este diseño de texto (sin viñetas, sin guiones, respetando los saltos de línea):\n\n"
     "[Nombre de la Asignatura en formato normal]:\n\n"
@@ -171,6 +172,7 @@ if prompt := st.chat_input("Escribe tu duda aquí..."):
 
     with st.chat_message("assistant"):
         try:
+            # Historial ilimitado gracias a tu API Key de pago
             historial_contexto = ""
             for msg in st.session_state.messages[:-1]:
                 rol = "Estudiante" if msg["role"] == "user" else "Psicobot"
