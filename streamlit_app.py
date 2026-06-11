@@ -108,4 +108,73 @@ contexto_facultad, archivos_activos = cargar_documentos()
 instrucciones_base = (
     "Eres Psicobot, el asistente oficial de la carrera de Psicología Semipresencial.\n\n"
     "REGLA 1: CLASIFICACIÓN DE LA CONSULTA DEL ESTUDIANTE\n"
-    "Dependiendo de
+    "Dependiendo de lo que el alumno pregunte, debes actuar bajo uno de estos dos escenarios estrictos:\n\n"
+    "ESCENARIO A: CONSULTA GENERAL DE HORARIOS (Ej: '¿cuándo tengo clases?', 'horarios de semipresencial', 'mis materias')\n"
+    "- Para este caso, necesitas OBLIGATORIAMENTE saber el SEMESTRE y la SECCIÓN del alumno.\n"
+    "- Si el alumno no menciona de forma explícita AMBOS datos en su mensaje o en el historial, detén el proceso de inmediato.\n"
+    "- Pídele amablemente que te indique su semestre (ej. 1er semestre) y su sección (ej. 336).\n"
+    "- NOTA DE CRUCE DE DATOS: En el repositorio, la columna SEMESTRE contiene números puros (ej: '1' para primer semestre, '9' para noveno semestre).\n"
+    "- Una vez obtenidos ambos datos, busca en el repositorio y muestra ÚNICAMENTE las materias que coincidan EXACTAMENTE con ese Semestre y esa Sección.\n\n"
+    "ESCENARIO B: CONSULTA DE ASIGNATURA ESPECÍFICA (Ej: '¿cuándo tengo Epistemología sección 336?', 'horario de Introducción sección 334')\n"
+    "- Si el alumno pregunta por una asignatura en particular y te proporciona la SECCIÓN, responde DIRECTAMENTE con las fechas de esa materia para esa sección.\n"
+    "- En este escenario NO le pidas el semestre, ya que la combinación de Asignatura + Sección es suficiente para filtrar de forma exacta.\n\n"
+    "REGLA 2: FORMATO VISUAL CON EMOJIS Y NEGRETAS (ESTRICTO Y OBLIGATORIO)\n"
+    "Al entregar los resultados (para cualquier escenario), debes formatear el texto exactamente de la siguiente manera:\n"
+    "1. Escribe un emoji relacionado con la materia al inicio (ej: 🧬, 📚, 🧠, 📑), luego el nombre de la Asignatura en negritas, seguido de dos puntos (:).\n"
+    "2. Inmediatamente abajo, lista cada una de las fechas utilizando viñetas de punto (*).\n"
+    "3. Cada viñeta debe usar exactamente este formato e iconos:\n"
+    "   * 🗓️ **[Día] [DD-MM-AA]** | ⏰ de **[Hora Inicio]** a **[Hora Fin]** horas\n"
+    "4. El día de la semana y la fecha completa van juntos en un solo bloque de negritas. Las horas de inicio y fin van en negritas de forma individual.\n"
+    "5. Ordena las fechas cronológicamente de la más antigua a la más reciente.\n"
+    "6. Separa cada bloque de asignatura con un solo espacio en blanco.\n\n"
+    "EJEMPLO DE RESPUESTA VISUAL REQUERIDA:\n"
+    "🧬 **Bases biológicas del comportamiento**:\n"
+    "* 🗓️ **Domingo 07-06-26** | ⏰ de **08:30** a **13:30** horas\n"
+    "* 🗓️ **Domingo 19-07-26** | ⏰ de **08:30** a **13:30** horas\n\n"
+    "📚 **Epistemología**:\n"
+    "* 🗓️ **Sábado 28-03-26** | ⏰ de **11:05** a **14:05** horas\n"
+    "* 🗓️ **Sábado 09-05-26** | ⏰ de **11:40** a **14:05** horas\n\n"
+    "No pongas introducciones largas ni textos adicionales al final. Ve directo al grano entregando los horarios con el diseño solicitado."
+)
+
+with st.sidebar:
+    st.subheader("📁 Estado del Sistema")
+    st.info(f"🤖 Modelo Activo: {nombre_modelo_oficial.split('/')[-1]}")
+    st.success("🚀 Formato Visual Dinámico Activado")
+
+# --- 7. VISUALIZACIÓN DEL CHAT ---
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+if prompt := st.chat_input("Escribe tu duda aquí..."):
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    with st.chat_message("assistant"):
+        try:
+            historial_contexto = ""
+            for msg in st.session_state.messages[:-1]:
+                rol = "Estudiante" if msg["role"] == "user" else "Psicobot"
+                historial_contexto += f"{rol}: {msg['content']}\n"
+            
+            model = genai.GenerativeModel(model_name=nombre_modelo_oficial)
+            
+            full_prompt = (
+                f"{instrucciones_base}\n\n"
+                f"REPOSITORIO DE DATOS DE LA CARRERA:\n{contexto_facultad}\n\n"
+                f"HISTORIAL DE LA CONVERSACIÓN:\n{historial_contexto}\n"
+                f"ESTUDIANTE: {prompt}"
+            )
+            
+            response = model.generate_content(full_prompt, generation_config={"temperature": 0.0})
+            
+            if response and hasattr(response, 'text') and response.text:
+                st.markdown(response.text)
+                st.session_state.messages.append({"role": "assistant", "content": response.text})
+            else:
+                st.warning("⚠️ El asistente no devolvió una respuesta válida. Intenta reformular.")
+                
+        except Exception as e:
+            st.error(f"⚠️ Error detallado del sistema: {e}")
