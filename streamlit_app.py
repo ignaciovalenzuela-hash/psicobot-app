@@ -1,17 +1,24 @@
 import streamlit as st
 import google.generativeai as genai
+from google.generativeai import caching
 import fitz  # Para los PDFs
-import pandas as pd  # Para el Excel (.xlsx y .csv)
+import pandas as pd  # Para el Excel
 import os
 import unicodedata
+import datetime
 
 # --- 1. CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Psicobot", page_icon="🧠", layout="centered")
 
-# Función auxiliar para limpiar acentos y espacios de los encabezados del Excel
 def normalizar_columna(col):
     col = str(col).strip().upper()
     return ''.join(ch for ch in unicodedata.normalize('NFD', col) if unicodedata.category(ch) != 'Mn')
+
+def limpiar_celda_texto(val):
+    if pd.isna(val): return ""
+    texto = str(val).strip()
+    if texto.endswith('.0'): texto = texto[:-2]
+    return texto
 
 # --- 2. LOGO Y ENCABEZADO ---
 col1, col2, col3 = st.columns([1, 1.2, 1])
@@ -22,7 +29,6 @@ with col2:
         st.caption("🚀 Psicobot en línea")
 
 st.markdown("<h1 style='text-align: center;'>Psicobot</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: gray;'>Tu asistente oficial de Psicología</p>", unsafe_allow_html=True)
 st.markdown("---")
 
 # --- 3. CONFIGURACIÓN DE API ---
@@ -32,101 +38,115 @@ else:
     st.error("Error: Configura la API Key en los Secrets.")
     st.stop()
 
-# --- 4. MEMORIA DEL CHAT ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# --- 5. CARGA ULTRA ROBUSTA DE REGLAMENTOS Y HORARIOS ---
+# --- 4. CARGA EXTREMA DE DATOS ---
 @st.cache_resource(show_spinner=False)
 def cargar_documentos():
     texto_total = ""
-    archivos_procesados_exitosamente = []
+    archivos_procesados = []
+    archivos_excluidos = {f"Calendario {i}mo semestre 2026-1.pdf" for i in range(1, 11)}
     
-    archivos_excluidos = {
-        "Calendario 10mo semestre 2026-1.pdf", "Calendario 1er semestre 2026-1.pdf",
-        "Calendario 2do semestre 2026-1.pdf", "Calendario 3er semestre 2026-1.pdf",
-        "Calendario 4to semestre 2026-1.pdf", "Calendario 5to semestre 2026-1.pdf",
-        "Calendario 6to semestre 2026-1.pdf", "Calendario 7mo semestre 2026-1.pdf",
-        "Calendario 8vo semestre 2026-1.pdf", "Calendario 9no semestre 2026-1.pdf"
-    }
-    
-    archivos = os.listdir()
-    
-    for a in archivos:
-        if a in archivos_excluidos:
-            continue
+    for a in os.listdir():
+        if a in archivos_excluidos: continue
             
-        # --- PROCESAR HORARIOS SEMIPRESENCIAL (.xlsx, .xls y .csv) ---
-        if a.endswith('.xlsx') or a.endswith('.xls') or a.endswith('.csv'):
+        if a.endswith(('.xlsx', '.xls', '.csv')):
             df = None
             try:
-                if a.endswith('.csv'):
-                    for encoding_opt in ['utf-8', 'latin-1', 'utf-8-sig', 'cp1252']:
-                        try:
-                            df = pd.read_csv(a, encoding=encoding_opt)
-                            break
-                        except: continue
-                else:
-                    df = pd.read_excel(a)
+                df = pd.read_csv(a, encoding='utf-8') if a.endswith('.csv') else pd.read_excel(a)
             except:
-                continue
+                try: df = pd.read_csv(a, encoding='latin-1')
+                except: continue
             
             if df is not None:
-                archivos_procesados_exitosamente.append(f"📊 Excel Horarios: {a}")
-                texto_total += f"\n\n--- INICIO BASE DE DATOS HORARIOS PRESENCIALES SEMIPRESENCIAL: {a} ---\n"
-                
-                # Estandarizamos encabezados (Quita tildes y pasa a mayúsculas)
+                archivos_procesados.append(f"📊 {a}")
+                texto_total += f"\n--- REPOSITORIO HORARIOS HORAS: {a} ---\n"
                 df.columns = [normalizar_columna(c) for c in df.columns]
                 
-                for index, fila in df.iterrows():
-                    fecha_raw = str(fila.get('FECHA DE LA CLASE', fila.get('FECHAS DE LA CLASE', '')))
-                    fecha_limpia = fecha_raw.split(' ')[0] if ' ' in fecha_raw else fecha_raw
+                for _, fila in df.iterrows():
+                    # Buscamos columnas alternativas según cómo nombres tu Excel
+                    asig = limpiar_celda_texto(fila.get('ASIGNATURAS', fila.get('ASIGNATURA', '')))
+                    secc = limpiar_celda_texto(fila.get('SECCION', fila.get('SECCIÓN', '')))
+                    sem = limpiar_celda_texto(fila.get('SEMESTRE', ''))
+                    dia = limpiar_celda_texto(fila.get('DIA', fila.get('DÍA', '')))
+                    f_raw = limpiar_celda_texto(fila.get('FECHA DE LA CLASE', fila.get('FECHA', '')))
+                    f_limpia = f_raw.split(' ')[0] if ' ' in f_raw else f_raw
+                    h_ini = limpiar_celda_texto(fila.get('HORA INICIO DE LA CLASE', fila.get('HORA_INICIO', '')))
+                    h_fin = limpiar_celda_texto(fila.get('HORA FINALIZACION DE LA CLASE', fila.get('HORA_FIN', '')))
                     
-                    texto_total += (
-                        f"Asignatura: {fila.get('ASIGNATURAS', fila.get('ASIGNATURA', ''))} ({fila.get('CODIGO DE ASIGNATURAS', '')}) | "
-                        f"Seccion: {fila.get('SECCION', '')} | "
-                        f"Docente: {fila.get('NOMBRES DOCENTE', '')} {fila.get('APELLIDO PATERNO DOCENTE', '')} {fila.get('APELLIDO MATERNO DOCENTE', '')} | "
-                        f"Dia de la semana: {fila.get('DIA', '')} | "
-                        f"Fecha: {fecha_limpia} | "
-                        f"Horario: {fila.get('HORA INICIO DE LA CLASE', '')} a {fila.get('HORA FINALIZACION DE LA CLASE', '')} | "
-                        f"Sala: {fila.get('CODIGO DE SALA DE CLASES', fila.get('SALA', ''))} | "
-                        f"Semestre: {fila.get('SEMESTRE', '')}\n"
-                    )
-                texto_total += f"--- FIN BASE DE DATOS HORARIOS SEMIPRESENCIAL ---\n"
-            
-        # --- PROCESAR REGLAMENTOS (PDFs) ---
+                    texto_total += f"Materia: {asig} | Seccion: {secc} | Semestre: {sem} | Dia: {dia} | Fecha: {f_limpia} | Horario: {h_ini} a {h_fin}\n"
+                texto_total += "--- FIN REPOSITORIO ---\n"
+                
         elif a.endswith('.pdf'):
             try:
                 with fitz.open(a) as doc:
                     for pagina in doc:
-                        texto_total += f"\n\n--- INICIO DOCUMENTO: {a} ---\n"
                         texto_total += pagina.get_text()
-                        texto_total += f"\n--- FIN DOCUMENTO: {a} ---\n"
-                archivos_procesados_exitosamente.append(f"📄 Documento PDF: {a}")
-            except: 
-                continue
+                archivos_procesados.append(f"📄 {a}")
+            except: continue
             
-    return texto_total, archivos_procesados_exitosamente
+    return texto_total, archivos_procesados
 
-# Ejecutamos la carga
 contexto_facultad, archivos_activos = cargar_documentos()
 
-# --- 5.1 BARRA LATERAL DE VERIFICACIÓN ---
-with st.sidebar:
-    st.subheader("📁 Sistema de Archivos Activo")
-    st.write("Documentos que Psicobot está leyendo en vivo:")
-    if archivos_activos:
-        for arch in archivos_activos:
-            st.success(arch)
-    else:
-        st.error("⚠️ No se han detectado archivos compatibles en la raíz de tu GitHub.")
+# --- 5. CONFIGURACIÓN DE CONTEXT CACHING (AHORRO CRÉDITOS) ---
+# Instrucciones del sistema que formatean la salida exactamente como lo pides
+instrucciones_base = (
+    "Eres Psicobot, el asistente oficial de Psicología.\n\n"
+    "REGLA 1: VALIDACIÓN ANTES DE RESPONDER\n"
+    "Si el alumno no indica explícitamente su MODALIDAD y su SECCIÓN, detenlo inmediatamente "
+    "y pídele amablemente esos datos antes de procesar cualquier horario.\n\n"
+    "REGLA 2: FORMATO DE SALIDA ESTRICTO POR ASIGNATURA\n"
+    "Cuando respondas los horarios de clases, debes agruparlos estrictamente por Asignatura utilizando "
+    "exactamente este diseño de texto (sin viñetas, sin guiones, respetando saltos de línea):\n\n"
+    "[Nombre de la Asignatura en formato normal]:\n\n"
+    "FECHAS\n"
+    "[día de la semana en minúscula] [DD-MM-AA] DE [Hora Inicio] A [Hora Fin] HORAS\n\n"
+    "EJEMPLO DE RESPUESTA REQUERIDA:\n"
+    "Introducción a la psicología:\n\n"
+    "FECHAS\n"
+    "domingo 29-03-26 DE 8:30 A 13:30 HORAS\n"
+    "domingo 10-05-26 DE 8:30 A 13:30 HORAS\n\n"
+    "Si hay más asignaturas agendadas para esa sección, pon un bloque completo abajo del otro separado por un espacio vacío."
+)
 
-# --- 6. VISUALIZACIÓN DEL HISTORIAL ---
+@st.cache_resource(show_spinner=False)
+def crear_context_cache(contexto, instrucciones):
+    # Combinamos todo el conocimiento base
+    bloque_conocimiento = f"{instrucciones}\n\nCONOCIMIENTO DE LA CARRERA:\n{contexto}"
+    
+    # Verificamos si el tamaño cumple con el mínimo requerido por Google (~32k tokens)
+    if len(bloque_conocimiento) < 130000:
+        return None  # Muy pequeño para caché de servidor, se usará el modo estándar económico
+    
+    try:
+        # Registramos el caché en los servidores de Google Gemini por un TTL de 3 horas
+        mi_cache = caching.CachedContent.create(
+            model='models/gemini-1.5-flash-001',
+            display_name='psicobot_data_cache',
+            contents=bloque_conocimiento,
+            ttl=datetime.timedelta(hours=3)
+        )
+        return mi_cache
+    except:
+        return None
+
+# Activamos el optimizador de créditos de Google
+cache_activo = crear_context_cache(contexto_facultad, instrucciones_base)
+
+with st.sidebar:
+    st.subheader("📁 Estado del Sistema")
+    if cache_activo:
+        st.success("⚡ Caché de Contexto Activo (Ahorro de créditos activado)")
+    else:
+        st.info("📉 Modo estándar (Consumo regular bajo)")
+
+# --- 6. CHAT ---
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# --- 7. LÓGICA DE PREGUNTAS Y RESPUESTAS ---
 if prompt := st.chat_input("Escribe tu duda aquí..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
@@ -134,62 +154,31 @@ if prompt := st.chat_input("Escribe tu duda aquí..."):
 
     with st.chat_message("assistant"):
         try:
-            modelos_disponibles = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-            nombre_modelo = next((m for m in modelos_disponibles if "flash" in m), modelos_disponibles[0])
+            # Reutilizamos el modelo asociado al caché guardado si está disponible
+            if cache_activo:
+                model = genai.GenerativeModel(name='models/gemini-1.5-flash-001', cached_content=cache_activo)
+            else:
+                model = genai.GenerativeModel(model_name='gemini-1.5-flash', system_instruction=instrucciones_base)
             
-            model = genai.GenerativeModel(
-                model_name=nombre_modelo,
-                generation_config={
-                    "temperature": 0.0, 
-                    "max_output_tokens": 2048,
-                }
-            )
-            
-            # INSTRUCCIONES MEJORADAS CON TRIPLE FILTRO Y FORMATO INTEGRAL
-            instrucciones = (
-                "Eres Psicobot, un tutor académico experto, empático y muy cercano para la carrera de Psicología.\n\n"
-                "REGLA 1: TRIPLE FILTRO DE VALIDACIÓN OBLIGATORIO\n"
-                "Si el estudiante realiza cualquier consulta sobre fechas de clases presenciales, horarios o asignaturas (ej. '¿cuándo son las clases presenciales?', '¿cuándo son las clases del 4to semestre?', '¿cuándo tengo clases?'):\n"
-                "- DEBES revisar minuciosamente la pregunta actual y el HISTORIAL de la conversación para comprobar si ya se conocen estos TRES datos indispensables:\n"
-                "  1) Modalidad (ej. Semipresencial)\n"
-                "  2) Semestre (ej. 4to Semestre o Semestre 4)\n"
-                "  3) Sección (ej. Sección 335 o 336)\n"
-                "- Si falta CUALQUIERA de estos tres datos esenciales, NO entregues ninguna fecha ni horario. Detén la respuesta de inmediato y pídele al alumno amablemente la información faltante en un solo mensaje. Ejemplo: '¡Hola! Para poder darte el calendario exacto con tus salas y docentes, ¿me podrías confirmar a qué modalidad, semestre y sección perteneces?'.\n\n"
-                "REGLA 2: FORMATO ESTRICTO DE RESPUESTA (CON ASIGNATURA Y SECCIÓN)\n"
-                "Una vez confirmada la modalidad semipresencial, el semestre y la sección, filtra la 'BASE DE DATOS HORARIOS PRESENCIALES SEMIPRESENCIAL' según lo solicitado.\n"
-                "Debes listar las jornadas estructurando la respuesta de forma obligatoria con el siguiente formato exacto (Respeta los saltos de línea y NO uses guiones o asteriscos para las listas):\n\n"
-                "📖 Asignatura: [Nombre Completo de la Asignatura] - Sección [Número]\n"
-                "📅 [Día de la semana] [Día] de [Mes] de [Año]\n\n"
-                "🕒 Horario: [Hora Inicio] a [Hora Fin] hrs.\n"
-                "📍 Sala: [Sala]\n"
-                "👨‍🏫 Docente: [Nombre Completo del Docente]\n\n"
-                "EJEMPLO DE SALIDA EXACTA REQUERIDA:\n"
-                "📖 Asignatura: EPISTEMOLOGÍA - Sección 336\n"
-                "📅 Sábado 28 de marzo de 2026\n\n"
-                "🕒 Horario: 11:05 a 14:05 hrs.\n"
-                "📍 Sala: CCC302\n"
-                "👨‍🏫 Docente: Marila Del Carmen García Puelpan\n\n"
-                "Si el alumno debe ver múltiples fechas de una asignatura o varias materias de su semestre, coloca un bloque abajo del otro siguiendo idénticamente este patrón estructural, separados por un espacio en blanco."
-            )
-
-            # Construcción del historial para la memoria de la IA
+            # Construcción de la memoria de la conversación actual
             historial_contexto = ""
             for msg in st.session_state.messages[:-1]:
                 rol = "Estudiante" if msg["role"] == "user" else "Psicobot"
                 historial_contexto += f"{rol}: {msg['content']}\n"
-
-            full_prompt = (
-                f"{instrucciones}\n\n"
-                f"CONTEXTO DE LA FACULTAD:\n{contexto_facultad[:300000]}\n\n"
-                f"HISTORIAL DE LA CONVERSACIÓN:\n{historial_contexto}\n"
-                f"PREGUNTA ACTUAL DEL ESTUDIANTE: {prompt}"
-            )
             
-            response = model.generate_content(full_prompt)
+            # Formamos el prompt final
+            if cache_activo:
+                # Si hay caché, no enviamos los archivos pesados, Google ya los tiene memorizados.
+                full_prompt = f"HISTORIAL:\n{historial_contexto}\nESTUDIANTE: {prompt}"
+            else:
+                # Si los archivos son pequeños, usamos el flujo regular
+                full_prompt = f"REPOSITORIO:\n{contexto_facultad[:100000]}\n\nHISTORIAL:\n{historial_contexto}\nESTUDIANTE: {prompt}"
+            
+            response = model.generate_content(full_prompt, generation_config={"temperature": 0.0})
             
             if response.text:
                 st.markdown(response.text)
                 st.session_state.messages.append({"role": "assistant", "content": response.text})
-            
+                
         except Exception as e:
-            st.error("Se produjo una breve interrupción en la línea. Por favor, intenta enviar tu pregunta de nuevo.")
+            st.error("Ocurrió un inconveniente al conectar con el servidor. Por favor reenvía tu pregunta.")
