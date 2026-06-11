@@ -35,7 +35,7 @@ st.markdown("---")
 if "GOOGLE_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 else:
-    st.error("Error: Configura la API Key en los Secrets.")
+    st.error("Error: Configura la API Key en los Secrets de Streamlit.")
     st.stop()
 
 if "messages" not in st.session_state:
@@ -65,7 +65,6 @@ def cargar_documentos():
                 df.columns = [normalizar_columna(c) for c in df.columns]
                 
                 for _, fila in df.iterrows():
-                    # Buscamos columnas alternativas según cómo nombres tu Excel
                     asig = limpiar_celda_texto(fila.get('ASIGNATURAS', fila.get('ASIGNATURA', '')))
                     secc = limpiar_celda_texto(fila.get('SECCION', fila.get('SECCIÓN', '')))
                     sem = limpiar_celda_texto(fila.get('SEMESTRE', ''))
@@ -90,8 +89,7 @@ def cargar_documentos():
 
 contexto_facultad, archivos_activos = cargar_documentos()
 
-# --- 5. CONFIGURACIÓN DE CONTEXT CACHING (AHORRO CRÉDITOS) ---
-# Instrucciones del sistema que formatean la salida exactamente como lo pides
+# --- 5. INSTRUCCIONES BASE DEL SISTEMA ---
 instrucciones_base = (
     "Eres Psicobot, el asistente oficial de Psicología.\n\n"
     "REGLA 1: VALIDACIÓN ANTES DE RESPONDER\n"
@@ -111,17 +109,16 @@ instrucciones_base = (
     "Si hay más asignaturas agendadas para esa sección, pon un bloque completo abajo del otro separado por un espacio vacío."
 )
 
+# --- 5.1 CONFIGURACIÓN DE CONTEXT CACHING ---
 @st.cache_resource(show_spinner=False)
 def crear_context_cache(contexto, instrucciones):
-    # Combinamos todo el conocimiento base
     bloque_conocimiento = f"{instrucciones}\n\nCONOCIMIENTO DE LA CARRERA:\n{contexto}"
     
-    # Verificamos si el tamaño cumple con el mínimo requerido por Google (~32k tokens)
+    # El límite mínimo obligatorio de Google para activar caché es ~32k tokens (~130,000 letras)
     if len(bloque_conocimiento) < 130000:
-        return None  # Muy pequeño para caché de servidor, se usará el modo estándar económico
+        return None  # Si tus archivos son pequeños, pasa directo al modo estándar económico
     
     try:
-        # Registramos el caché en los servidores de Google Gemini por un TTL de 3 horas
         mi_cache = caching.CachedContent.create(
             model='models/gemini-1.5-flash-001',
             display_name='psicobot_data_cache',
@@ -132,17 +129,16 @@ def crear_context_cache(contexto, instrucciones):
     except:
         return None
 
-# Activamos el optimizador de créditos de Google
 cache_activo = crear_context_cache(contexto_facultad, instrucciones_base)
 
 with st.sidebar:
     st.subheader("📁 Estado del Sistema")
     if cache_activo:
-        st.success("⚡ Caché de Contexto Activo (Ahorro de créditos activado)")
+        st.success("⚡ Caché Activo (Ahorro de créditos)")
     else:
-        st.info("📉 Modo estándar (Consumo regular bajo)")
+        st.info("📉 Modo estándar (Optimizado de bajo consumo)")
 
-# --- 6. CHAT ---
+# --- 6. VISUALIZACIÓN DEL CHAT ---
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
@@ -154,31 +150,35 @@ if prompt := st.chat_input("Escribe tu duda aquí..."):
 
     with st.chat_message("assistant"):
         try:
-            # Reutilizamos el modelo asociado al caché guardado si está disponible
-            if cache_activo:
-                model = genai.GenerativeModel(name='models/gemini-1.5-flash-001', cached_content=cache_activo)
-            else:
-                model = genai.GenerativeModel(model_name='gemini-1.5-flash', system_instruction=instrucciones_base)
-            
             # Construcción de la memoria de la conversación actual
             historial_contexto = ""
             for msg in st.session_state.messages[:-1]:
                 rol = "Estudiante" if msg["role"] == "user" else "Psicobot"
                 historial_contexto += f"{rol}: {msg['content']}\n"
             
-            # Formamos el prompt final
+            # Inicialización y ejecución según disponibilidad del Caché de Google
             if cache_activo:
-                # Si hay caché, no enviamos los archivos pesados, Google ya los tiene memorizados.
+                # CORREGIDO: Cambiado 'name=' por 'model_name='
+                model = genai.GenerativeModel(model_name='models/gemini-1.5-flash-001', cached_content=cache_activo)
                 full_prompt = f"HISTORIAL:\n{historial_contexto}\nESTUDIANTE: {prompt}"
             else:
-                # Si los archivos son pequeños, usamos el flujo regular
-                full_prompt = f"REPOSITORIO:\n{contexto_facultad[:100000]}\n\nHISTORIAL:\n{historial_contexto}\nESTUDIANTE: {prompt}"
+                # CORREGIDO: Eliminado system_instruction del constructor para máxima compatibilidad
+                model = genai.GenerativeModel(model_name='models/gemini-1.5-flash')
+                full_prompt = (
+                    f"{instrucciones_base}\n\n"
+                    f"REPOSITORIO:\n{contexto_facultad[:100000]}\n\n"
+                    f"HISTORIAL COVERSACIÓN:\n{historial_contexto}\n"
+                    f"ESTUDIANTE: {prompt}"
+                )
             
             response = model.generate_content(full_prompt, generation_config={"temperature": 0.0})
             
-            if response.text:
+            if response and hasattr(response, 'text') and response.text:
                 st.markdown(response.text)
                 st.session_state.messages.append({"role": "assistant", "content": response.text})
+            else:
+                st.warning("⚠️ El asistente no devolvió una respuesta válida. Intenta reformular.")
                 
         except Exception as e:
-            st.error("Ocurrió un inconveniente al conectar con el servidor. Por favor reenvía tu pregunta.")
+            # CORREGIDO: Ahora te dirá explícitamente en pantalla qué error técnico está ocurriendo
+            st.error(f"⚠️ Error detallado del sistema: {e}")
