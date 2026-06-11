@@ -49,7 +49,7 @@ else:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# --- 4. DETECCIÓN DINÁMICA DE MODELOS ACTIVOS ---
+# --- 4. CONFIGURACIÓN DEL MODELO DE ÚLTIMA GENERACIÓN (MÁXIMA VELOCIDAD) ---
 @st.cache_resource(show_spinner=False)
 def obtener_modelo_flash_activo():
     try:
@@ -57,12 +57,10 @@ def obtener_modelo_flash_activo():
         for m in modelos_disponibles:
             if 'generateContent' in m.supported_generation_methods and 'flash' in m.name.lower():
                 return m.name
-        for m in modelos_disponibles:
-            if 'generateContent' in m.supported_generation_methods:
-                return m.name
     except:
         pass
-    return 'models/gemini-1.5-flash-latest'
+    # Forzamos por defecto el modelo de la serie 2.5 de Google
+    return 'models/gemini-2.5-flash'
 
 nombre_modelo_oficial = obtener_modelo_flash_activo()
 
@@ -114,7 +112,7 @@ def cargar_documentos():
 
 contexto_facultad, archivos_activos = cargar_documentos()
 
-# --- 6. INSTRUCCIONES DE SISTEMA CON CONTROL DE MODALIDAD ---
+# --- 6. INSTRUCCIONES DE SISTEMA CON CONTROL DE MODALIDAD Y FORMATO BLINDADO ---
 instrucciones_base = (
     "Eres Psicobot, el asistente oficial integral de la Escuela de Psicología.\n"
     "Tu objetivo es dar respuestas PRECISAS, DIRECTAS Y CONCISAS, usando emojis y negritas, sin saludos ni despedidas largas.\n\n"
@@ -131,11 +129,14 @@ instrucciones_base = (
     "- Responde de inmediato sin pedir semestre usando el FORMATO VISUAL ESTRICTO.\n\n"
     "ESCENARIO C: CONSULTA GENERAL O ADMINISTRATIVA\n"
     "- Responde de forma directa basándote en los documentos. CRÍTICO: Aplica el reglamento específico según la modalidad del alumno (ej: recuerda que la eximición de exámenes aplica SOLO a la modalidad presencial y NO a la semipresencial).\n\n"
-    "REGLA 2: FORMATO VISUAL PARA HORARIOS (SOLO ESCENARIOS A Y B)\n"
-    "Asegura un doble salto de línea obligatorio entre cada asignatura:\n\n"
-    "[Emoji] **[Nombre de la Asignatura en Mayúsculas]**:\n"
-    "* 🗓️ **[Día] [DD-MM-AA]** | ⏰ de **[Hora Inicio]** a **[Hora Fin]** horas\n\n"
-    "Cada asignatura debe iniciar obligatoriamente al principio de una línea limpia."
+    "REGLA 2: FORMATO VISUAL PARA HORARIOS (SOLO ESCENARIOS A Y B - ESTRICTO)\n"
+    "Para evitar que las materias se junten en la misma línea, debes estructurar la lista dejando obligatoriamente una línea en blanco (doble salto de línea) entre el final de una asignatura y el inicio de la siguiente. Sigue este ejemplo exacto de espaciado:\n\n"
+    "🧠 **ELEMENTOS DE NEUROCIENCIA**:\n"
+    "* 🗓️ **DOMINGO 26-04-26** | ⏰ de **14:30** a **19:30** horas\n\n"
+    "📊 **METODOLOGÍA CUANTITATIVA DE INVESTIGACIÓN**:\n"
+    "* 🗓️ **SABADO 25-04-26** | ⏰ de **14:30** a **16:55** horas\n"
+    "* 🗓️ **SABADO 30-05-26** | ⏰ de **14:30** a **17:40** horas\n\n"
+    "REGLA CRÍTICA DE ESPACIADO: Jamás coloques el nombre o el emoji de una nueva asignatura en la misma línea donde termina el horario de la materia anterior. Cada materia debe iniciar obligatoriamente al principio de un renglón completamente limpio."
 )
 
 # --- 7. PANTALLA DE BIENVENIDA (Aparece solo si no hay mensajes) ---
@@ -150,9 +151,8 @@ if not st.session_state.messages:
         st.info("📋 **Dudas Administrativas**\n\nEjemplo: *'Soy de Presencial Diurno, ¿me puedo eximir de los exámenes finales?'*")
     st.markdown("<br>", unsafe_allow_html=True)
 
-# --- 8. VISUALIZACIÓN DEL CHAT CON AVATARES ---
+# --- 8. VISUALIZACIÓN DEL CHAT CON AVATARES Y MENSAJE DE ESPERA ---
 for message in st.session_state.messages:
-    # Asignar avatares: Estudiante (🎓) / Bot (🧠)
     avatar_icon = "🎓" if message["role"] == "user" else "🧠"
     with st.chat_message(message["role"], avatar=avatar_icon):
         st.markdown(message["content"])
@@ -163,28 +163,30 @@ if prompt := st.chat_input("Escribe tu duda aquí..."):
         st.markdown(prompt)
 
     with st.chat_message("assistant", avatar="🧠"):
-        try:
-            historial_contexto = ""
-            for msg in st.session_state.messages[:-1]:
-                rol = "Estudiante" if msg["role"] == "user" else "Psicobot"
-                historial_contexto += f"{rol}: {msg['content']}\n"
-            
-            model = genai.GenerativeModel(model_name=nombre_modelo_oficial)
-            
-            full_prompt = (
-                f"{instrucciones_base}\n\n"
-                f"REPOSITORIO DE DATOS DE LA CARRERA:\n{contexto_facultad}\n\n"
-                f"HISTORIAL DE LA CONVERSACIÓN:\n{historial_contexto}\n"
-                f"ESTUDIANTE: {prompt}"
-            )
-            
-            response = model.generate_content(full_prompt, generation_config={"temperature": 0.1})
-            
-            if response and hasattr(response, 'text') and response.text:
-                st.markdown(response.text)
-                st.session_state.messages.append({"role": "assistant", "content": response.text})
-            else:
-                st.warning("⚠️ El asistente no devolvió una respuesta válida. Intenta reformular.")
+        # Mensaje dinámico mientras la IA genera la respuesta
+        with st.spinner("Preparando respuesta..."):
+            try:
+                historial_contexto = ""
+                for msg in st.session_state.messages[:-1]:
+                    rol = "Estudiante" if msg["role"] == "user" else "Psicobot"
+                    historial_contexto += f"{rol}: {msg['content']}\n"
                 
-        except Exception as e:
-            st.error(f"⚠️ Error detallado del sistema: {e}")
+                model = genai.GenerativeModel(model_name=nombre_modelo_oficial)
+                
+                full_prompt = (
+                    f"{instrucciones_base}\n\n"
+                    f"REPOSITORIO DE DATOS DE LA CARRERA:\n{contexto_facultad}\n\n"
+                    f"HISTORIAL DE LA CONVERSACIÓN:\n{historial_contexto}\n"
+                    f"ESTUDIANTE: {prompt}"
+                )
+                
+                response = model.generate_content(full_prompt, generation_config={"temperature": 0.1})
+                
+                if response and hasattr(response, 'text') and response.text:
+                    st.markdown(response.text)
+                    st.session_state.messages.append({"role": "assistant", "content": response.text})
+                else:
+                    st.warning("⚠️ El asistente no devolvió una respuesta válida. Intenta reformular.")
+                    
+            except Exception as e:
+                st.error(f"⚠️ Error detallado del sistema: {e}")
