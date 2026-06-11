@@ -5,8 +5,18 @@ import pandas as pd  # Para el Excel
 import os
 import unicodedata
 
-# --- 1. CONFIGURACIÓN DE PÁGINA ---
+# --- 1. CONFIGURACIÓN DE PÁGINA Y ESTILOS VISUALES (CSS) ---
 st.set_page_config(page_title="Psicobot", page_icon="🧠", layout="centered")
+
+# Inyección de CSS para limpiar la interfaz y darle look de App
+st.markdown("""
+<style>
+    /* Ocultar el menú superior y el footer de Streamlit */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+</style>
+""", unsafe_allow_html=True)
 
 def normalizar_columna(col):
     col = str(col).strip().upper()
@@ -128,17 +138,31 @@ instrucciones_base = (
     "Cada asignatura debe iniciar obligatoriamente al principio de una línea limpia."
 )
 
-# --- 7. VISUALIZACIÓN DEL CHAT ---
+# --- 7. PANTALLA DE BIENVENIDA (Aparece solo si no hay mensajes) ---
+if not st.session_state.messages:
+    st.markdown("<h3 style='text-align: center; color: #2e6c80;'>¡Hola! Estoy aquí para ayudarte 🤖</h3>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center;'>Puedes preguntarme sobre tus horarios o procesos de la carrera.</p>", unsafe_allow_html=True)
+    
+    colA, colB = st.columns(2)
+    with colA:
+        st.info("📅 **Horarios de Clases**\n\nEjemplo: *'Soy de Semipresencial, 1er semestre, sección 336. ¿Cuándo tengo clases?'*")
+    with colB:
+        st.info("📋 **Dudas Administrativas**\n\nEjemplo: *'Soy de Presencial Diurno, ¿me puedo eximir de los exámenes finales?'*")
+    st.markdown("<br>", unsafe_allow_html=True)
+
+# --- 8. VISUALIZACIÓN DEL CHAT CON AVATARES ---
 for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
+    # Asignar avatares: Estudiante (🎓) / Bot (🧠)
+    avatar_icon = "🎓" if message["role"] == "user" else "🧠"
+    with st.chat_message(message["role"], avatar=avatar_icon):
         st.markdown(message["content"])
 
 if prompt := st.chat_input("Escribe tu duda aquí..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
+    with st.chat_message("user", avatar="🎓"):
         st.markdown(prompt)
 
-    with st.chat_message("assistant"):
+    with st.chat_message("assistant", avatar="🧠"):
         try:
             historial_contexto = ""
             for msg in st.session_state.messages[:-1]:
