@@ -45,24 +45,17 @@ if "messages" not in st.session_state:
 @st.cache_resource(show_spinner=False)
 def obtener_modelo_flash_activo():
     try:
-        # Le pedimos a Google la lista real de modelos compatibles con tu cuenta
         modelos_disponibles = list(genai.list_models())
-        
-        # 1. Buscamos primero cualquier variante estable de Flash
         for m in modelos_disponibles:
             if 'generateContent' in m.supported_generation_methods and 'flash' in m.name.lower():
                 return m.name
-                
-        # 2. Si no encuentra "flash", elige el primero disponible que pueda chatear
         for m in modelos_disponibles:
             if 'generateContent' in m.supported_generation_methods:
                 return m.name
     except:
         pass
-    # Fallback de emergencia si el listado falla por completo
     return 'models/gemini-1.5-flash-latest'
 
-# Ejecutamos la autodetección del modelo
 nombre_modelo_oficial = obtener_modelo_flash_activo()
 
 # --- 5. CARGA EXTREMA DE DATOS ---
@@ -113,15 +106,21 @@ def cargar_documentos():
 
 contexto_facultad, archivos_activos = cargar_documentos()
 
-# --- 6. INSTRUCCIONES BASE DEL SISTEMA ---
+# --- 6. INSTRUCCIONES DEFINITIVAS DE FILTRADO ---
 instrucciones_base = (
-    "Eres Psicobot, el asistente oficial de Psicología.\n\n"
-    "REGLA 1: VALIDACIÓN ANTES DE RESPONDER\n"
-    "Si el alumno no indica explícitamente su MODALIDAD y su SECCIÓN, detenlo inmediatamente "
-    "y pídele amablemente esos datos antes de procesar cualquier horario.\n\n"
+    "Eres Psicobot, el asistente oficial de la carrera de Psicología Semipresencial.\n\n"
+    "REGLA 1: CLASIFICACIÓN DE LA CONSULTA DEL ESTUDIANTE\n"
+    "Dependiendo de lo que el alumno pregunte, debes actuar bajo uno de estos dos escenarios estrictos:\n\n"
+    "ESCENARIO A: CONSULTA GENERAL DE HORARIOS (Ej: '¿cuándo tengo clases?', 'horarios de semipresencial', 'mis materias')\n"
+    "- Para este caso, necesitas OBLIGATORIAMENTE saber el SEMESTRE y la SECCIÓN del alumno.\n"
+    "- Si el alumno no menciona de forma explícita AMBOS datos en su mensaje o en el historial, detén el proceso de inmediato.\n"
+    "- Pídele amablemente que te indique su semestre (ej. 1er semestre) y su sección (ej. 336).\n"
+    "- Una vez obtenidos ambos datos, busca en el repositorio y muestra ÚNICAMENTE las materias que coincidan EXACTAMENTE con ese Semestre y esa Sección.\n\n"
+    "ESCENARIO B: CONSULTA DE ASIGNATURA ESPECÍFICA (Ej: '¿cuándo tengo Epistemología sección 336?', 'horario de Introducción sección 334')\n"
+    "- Si el alumno pregunta por una asignatura en particular y te proporciona la SECCIÓN, responde DIRECTAMENTE con las fechas de esa materia para esa sección.\n"
+    "- En este escenario NO le pidas el semestre, ya que la combinación de Asignatura + Sección es suficiente para identificar las filas correctas en el repositorio.\n\n"
     "REGLA 2: FORMATO DE SALIDA ESTRICTO POR ASIGNATURA\n"
-    "Cuando respondas los horarios de clases, debes agruparlos estrictamente por Asignatura utilizando "
-    "exactamente este diseño de texto (sin viñetas, sin guiones, respetando saltos de línea):\n\n"
+    "Para cualquiera de los dos escenarios anteriores, al entregar los horarios debes agruparlos por Asignatura usando exactamente este diseño de texto (sin viñetas, sin guiones, respetando los saltos de línea):\n\n"
     "[Nombre de la Asignatura en formato normal]:\n\n"
     "FECHAS\n"
     "[día de la semana en minúscula] [DD-MM-AA] DE [Hora Inicio] A [Hora Fin] HORAS\n\n"
@@ -130,21 +129,18 @@ instrucciones_base = (
     "FECHAS\n"
     "domingo 29-03-26 DE 8:30 A 13:30 HORAS\n"
     "domingo 10-05-26 DE 8:30 A 13:30 HORAS\n\n"
-    "Si hay más asignaturas agendadas para esa sección, pon un bloque completo abajo del otro separado por un espacio vacío."
+    "Si hay múltiples asignaturas que cumplan con el filtro del estudiante, coloca un bloque completo abajo del otro, separados exactamente por un espacio en blanco."
 )
 
 # --- 6.1 CONFIGURACIÓN DE CONTEXT CACHING ---
 @st.cache_resource(show_spinner=False)
 def crear_context_cache(contexto, instrucciones, modelo_destino):
     bloque_conocimiento = f"{instrucciones}\n\nCONOCIMIENTO DE LA CARRERA:\n{contexto}"
-    
-    # El límite mínimo obligatorio de Google para activar caché es ~130,000 letras
     if len(bloque_conocimiento) < 130000:
         return None
-    
     try:
         mi_cache = caching.CachedContent.create(
-            model=modelo_destino,  # Usamos dinámicamente el modelo detectado
+            model=modelo_destino,
             display_name='psicobot_data_cache',
             contents=bloque_conocimiento,
             ttl=datetime.timedelta(hours=3)
@@ -175,13 +171,11 @@ if prompt := st.chat_input("Escribe tu duda aquí..."):
 
     with st.chat_message("assistant"):
         try:
-            # Construcción de la memoria de la conversación actual
             historial_contexto = ""
             for msg in st.session_state.messages[:-1]:
                 rol = "Estudiante" if msg["role"] == "user" else "Psicobot"
                 historial_contexto += f"{rol}: {msg['content']}\n"
             
-            # Ejecución utilizando el modelo detectado automáticamente
             if cache_activo:
                 model = genai.GenerativeModel(model_name=nombre_modelo_oficial, cached_content=cache_activo)
                 full_prompt = f"HISTORIAL:\n{historial_contexto}\nESTUDIANTE: {prompt}"
