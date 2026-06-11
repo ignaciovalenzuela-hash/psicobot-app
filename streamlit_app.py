@@ -8,9 +8,10 @@ import unicodedata
 # --- 1. CONFIGURACIÓN DE PÁGINA Y ESTILOS VISUALES (CSS) ---
 st.set_page_config(page_title="Psicobot", page_icon="🧠", layout="centered")
 
-# Inyección de CSS para limpiar la interfaz
+# Inyección de CSS para limpiar la interfaz y darle look de App
 st.markdown("""
 <style>
+    /* Ocultar el menú superior y el footer de Streamlit */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
@@ -48,9 +49,9 @@ else:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# --- 4. CONFIGURACIÓN DEL MODELO ULTRA-RÁPIDO (8B) ---
-# Forzamos el uso del modelo más ligero y veloz de Google
-nombre_modelo_oficial = 'models/gemini-1.5-flash-8b'
+# --- 4. CONFIGURACIÓN DEL MODELO ULTRA-RÁPIDO Y ESTABLE ---
+# Utilizamos Gemini 2.5 Flash por ser la opción más veloz y robusta disponible
+nombre_modelo_oficial = 'models/gemini-2.5-flash'
 
 # --- 5. CARGA DE DATOS DESDE EL REPOSITORIO ---
 @st.cache_resource(show_spinner=False)
@@ -105,27 +106,29 @@ instrucciones_base = (
     "Eres Psicobot, el asistente oficial integral de la Escuela de Psicología.\n"
     "Tu objetivo es dar respuestas PRECISAS, DIRECTAS Y CONCISAS, usando emojis y negritas, sin saludos ni despedidas largas.\n\n"
     "REGLA 0: FILTRO OBLIGATORIO DE MODALIDAD (CRÍTICA)\n"
-    "- En la carrera existen dos modalidades principales: 1) Presencial (Diurno y Vespertino) y 2) Semipresencial.\n"
-    "- Antes de responder CUALQUIER consulta, revisa el historial. Si el alumno NO ha mencionado a qué modalidad pertenece, detente y pídele que te lo indique: 'Para entregarte la información correcta, ¿a qué modalidad perteneces? (Presencial Diurno, Presencial Vespertino o Semipresencial)'.\n"
-    "- Si el alumno ya lo mencionó o se deduce claramente, procede.\n\n"
-    "REGLA 1: CLASIFICACIÓN DE LA CONSULTA\n"
+    "- En la carrera existen dos modalidades principales: 1) Presencial (que se divide en Diurno y Vespertino) y 2) Semipresencial.\n"
+    "- Antes de responder CUALQUIER consulta de horarios o de lineamientos administrativos, revisa el historial. Si el alumno NO ha mencionado de forma explícita a qué modalidad pertenece, debes detenerte inmediatamente y pedirle que te lo indique. \n"
+    "- Haz la pregunta de forma muy breve, por ejemplo: 'Para entregarte la información correcta, ¿a qué modalidad perteneces? (Presencial Diurno, Presencial Vespertino o Semipresencial)'.\n"
+    "- Si el alumno ya lo mencionó o lo deduces con total certeza por los datos provistos (ej. si da una sección semipresencial), procede con las siguientes reglas.\n\n"
+    "REGLA 1: CLASIFICACIÓN DE LA CONSULTA (UNA VEZ SABIENDO LA MODALIDAD)\n"
     "ESCENARIO A: CONSULTA GENERAL DE HORARIOS DE CLASE\n"
     "- Requieres OBLIGATORIAMENTE el SEMESTRE y SECCIÓN. Pídelos brevemente si faltan.\n"
+    "- Muestra exclusivamente las materias correspondientes usando el FORMATO VISUAL ESTRICTO.\n\n"
     "ESCENARIO B: CONSULTA DE UNA ASIGNATURA Y SECCIÓN ESPECÍFICA\n"
-    "- Responde de inmediato sin pedir semestre.\n"
+    "- Responde de inmediato sin pedir semestre usando el FORMATO VISUAL ESTRICTO.\n\n"
     "ESCENARIO C: CONSULTA GENERAL O ADMINISTRATIVA\n"
-    "- Responde de forma directa basándote en los documentos. Aplica el reglamento específico según la modalidad del alumno.\n\n"
-    "REGLA 2: FORMATO VISUAL PARA HORARIOS (ESTRICTO)\n"
-    "Asegura un doble salto de línea obligatorio entre el final de una asignatura y el inicio de la siguiente:\n\n"
+    "- Responde de forma directa basándote en los documentos. CRÍTICO: Aplica el reglamento específico según la modalidad del alumno (ej: recuerda que la eximición de exámenes aplica SOLO a la modalidad presencial y NO a la semipresencial).\n\n"
+    "REGLA 2: FORMATO VISUAL PARA HORARIOS (SOLO ESCENARIOS A Y B - ESTRICTO)\n"
+    "Para evitar que las materias se junten en la misma línea, debes estructurar la lista dejando obligatoriamente una línea en blanco (doble salto de línea) entre el final de una asignatura y el inicio de la siguiente. Sigue este ejemplo exacto de espaciado:\n\n"
     "🧠 **ELEMENTOS DE NEUROCIENCIA**:\n"
     "* 🗓️ **DOMINGO 26-04-26** | ⏰ de **14:30** a **19:30** horas\n\n"
     "📊 **METODOLOGÍA CUANTITATIVA DE INVESTIGACIÓN**:\n"
     "* 🗓️ **SABADO 25-04-26** | ⏰ de **14:30** a **16:55** horas\n"
     "* 🗓️ **SABADO 30-05-26** | ⏰ de **14:30** a **17:40** horas\n\n"
-    "REGLA CRÍTICA: Cada materia debe iniciar al principio de un renglón limpio."
+    "REGLA CRÍTICA DE ESPACIADO: Jamás coloques el nombre o el emoji de una nueva asignatura en la misma línea donde termina el horario de la materia anterior. Cada materia debe iniciar obligatoriamente al principio de un renglón completamente limpio."
 )
 
-# --- 7. PANTALLA DE BIENVENIDA ---
+# --- 7. PANTALLA DE BIENVENIDA (Aparece solo si no hay mensajes) ---
 if not st.session_state.messages:
     st.markdown("<h3 style='text-align: center; color: #2e6c80;'>¡Hola! Estoy aquí para ayudarte 🤖</h3>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center;'>Puedes preguntarme sobre tus horarios o procesos de la carrera.</p>", unsafe_allow_html=True)
@@ -137,7 +140,7 @@ if not st.session_state.messages:
         st.info("📋 **Dudas Administrativas**\n\nEjemplo: *'Soy de Presencial Diurno, ¿me puedo eximir de los exámenes finales?'*")
     st.markdown("<br>", unsafe_allow_html=True)
 
-# --- 8. VISUALIZACIÓN DEL CHAT CON STREAMING ---
+# --- 8. VISUALIZACIÓN DEL CHAT CON STREAMING SEGURO ---
 for message in st.session_state.messages:
     avatar_icon = "🎓" if message["role"] == "user" else "🧠"
     with st.chat_message(message["role"], avatar=avatar_icon):
@@ -164,22 +167,22 @@ if prompt := st.chat_input("Escribe tu duda aquí..."):
                 f"ESTUDIANTE: {prompt}"
             )
             
-            # Activamos el streaming (stream=True) para que el texto aparezca de inmediato
+            # Activamos el streaming de la respuesta
             response = model.generate_content(full_prompt, generation_config={"temperature": 0.1}, stream=True)
             
-            # Contenedor vacío donde se irá escribiendo el texto en vivo
-            placeholder = st.empty()
-            full_response = ""
+            # Función generadora para procesar los pedazos de texto de forma segura
+            def stream_data():
+                for chunk in response:
+                    try:
+                        if chunk.text:
+                            yield chunk.text
+                    except Exception:
+                        pass
             
-            # Bucle que imprime el texto palabra por palabra en tiempo real
-            for chunk in response:
-                if chunk.text:
-                    full_response += chunk.text
-                    placeholder.markdown(full_response + "▌") # Añade un cursor titilante visual
+            # Streamlit se encarga de escribirlo en tiempo real de forma nativa
+            full_response = st.write_stream(stream_data())
             
-            # Quitamos el cursor al final
-            placeholder.markdown(full_response)
-            
+            # Guardamos la respuesta completa en el historial
             st.session_state.messages.append({"role": "assistant", "content": full_response})
                 
         except Exception as e:
