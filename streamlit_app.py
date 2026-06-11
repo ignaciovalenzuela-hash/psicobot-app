@@ -104,7 +104,7 @@ def cargar_documentos():
 
 contexto_facultad, archivos_activos = cargar_documentos()
 
-# --- 6. INSTRUCCIONES DEFINITIVAS DE FILTRADO ---
+# --- 6. INSTRUCCIONES MEJORADAS DE FILTRADO Y FORMATO ---
 instrucciones_base = (
     "Eres Psicobot, el asistente oficial de la carrera de Psicología Semipresencial.\n\n"
     "REGLA 1: CLASIFICACIÓN DE LA CONSULTA DEL ESTUDIANTE\n"
@@ -118,17 +118,21 @@ instrucciones_base = (
     "ESCENARIO B: CONSULTA DE ASIGNATURA ESPECÍFICA (Ej: '¿cuándo tengo Epistemología sección 336?', 'horario de Introducción sección 334')\n"
     "- Si el alumno pregunta por una asignatura en particular y te proporciona la SECCIÓN, responde DIRECTAMENTE con las fechas de esa materia para esa sección.\n"
     "- En este escenario NO le pidas el semestre, ya que la combinación de Asignatura + Sección es suficiente para filtrar de forma exacta en el repositorio.\n\n"
-    "REGLA 2: FORMATO DE SALIDA ESTRICTO POR ASIGNATURA\n"
-    "Para cualquiera de los dos escenarios anteriores, al entregar los horarios debes agruparlos por Asignatura usando exactamente este diseño de texto (sin viñetas, sin guiones, respetando los saltos de línea):\n\n"
-    "[Nombre de la Asignatura en formato normal]:\n\n"
-    "FECHAS\n"
-    "[día de la semana en minúscula] [DD-MM-AA] DE [Hora Inicio] A [Hora Fin] HORAS\n\n"
-    "EJEMPLO DE RESPUESTA REQUERIDA:\n"
-    "Introducción a la psicología:\n\n"
-    "FECHAS\n"
-    "domingo 29-03-26 DE 8:30 A 13:30 HORAS\n"
-    "domingo 10-05-26 DE 8:30 A 13:30 HORAS\n\n"
-    "Si hay múltiples asignaturas que cumplan con el filtro del estudiante, coloca un bloque completo abajo del otro, separados exactamente por un espacio en blanco."
+    "REGLA 2: FORMATO DE SALIDA ESTRICTO Y PUNTUADO (OBLIGATORIO)\n"
+    "Al entregar los resultados (para cualquier escenario), debes formatear el texto exactamente de la siguiente manera:\n"
+    "1. Escribe el nombre de la Asignatura con mayúscula inicial, seguido de dos puntos (:).\n"
+    "2. Inmediatamente abajo, lista cada una de las fechas utilizando viñetas de punto (*).\n"
+    "3. Cada viñeta debe seguir este patrón estricto: * [Día de la semana con mayúscula inicial] [DD-MM-AA] de [Hora Inicio] a [Hora Fin] horas\n"
+    "4. Ordena las fechas de forma cronológica (de la más antigua a la más reciente).\n"
+    "5. Separa cada bloque de asignatura con un solo espacio en blanco.\n\n"
+    "EJEMPLO DE RESPUESTA IMPECABLE:\n"
+    "Bases biológicas del comportamiento:\n"
+    "* Domingo 07-06-26 de 08:30 a 13:30 horas\n"
+    "* Domingo 19-07-26 de 08:30 a 13:30 horas\n\n"
+    "Epistemología:\n"
+    "* Sábado 28-03-26 de 11:05 a 14:05 horas\n"
+    "* Sábado 09-05-26 de 11:40 a 14:05 horas\n\n"
+    "No agregues introducciones largas, saludos repetitivos ni textos adicionales al final. Entrega directamente los bloques de horarios."
 )
 
 with st.sidebar:
@@ -148,16 +152,13 @@ if prompt := st.chat_input("Escribe tu duda aquí..."):
 
     with st.chat_message("assistant"):
         try:
-            # Construcción limpia de la memoria de la conversación
             historial_contexto = ""
             for msg in st.session_state.messages[:-1]:
                 rol = "Estudiante" if msg["role"] == "user" else "Psicobot"
                 historial_contexto += f"{rol}: {msg['content']}\n"
             
-            # Inicialización directa y robusta del modelo
             model = genai.GenerativeModel(model_name=nombre_modelo_oficial)
             
-            # Construcción del prompt completo con el repositorio inyectado directamente
             full_prompt = (
                 f"{instrucciones_base}\n\n"
                 f"REPOSITORIO DE DATOS DE LA CARRERA:\n{contexto_facultad}\n\n"
