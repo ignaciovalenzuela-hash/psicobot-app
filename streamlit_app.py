@@ -97,29 +97,30 @@ def cargar_documentos():
                 with fitz.open(a) as doc:
                     for pagina in doc:
                         texto_total += pagina.get_text()
-                archivos_procesados.append(f"📄 {a}")
+                archivos_processed.append(f"📄 {a}")
             except: continue
             
     return texto_total, archivos_procesados
 
 contexto_facultad, archivos_activos = cargar_documentos()
 
-# --- 6. INSTRUCCIONES DE SISTEMA (CONCISAS Y OPTIMIZADAS) ---
+# --- 6. INSTRUCCIONES MEJORADAS CON SALTOS DE LÍNEA ESTRICTOS ---
 instrucciones_base = (
     "Eres Psicobot, el asistente oficial integral de la carrera de Psicología Semipresencial.\n"
-    "Tu objetivo es dar respuestas PRECISAS, DIRECTAS Y CONCISAS. Evita párrafos de relleno, no uses saludos largos (como '¡Hola de nuevo!') en cada interacción y no agregues despedidas largas. Ve directamente a la información solicitada manteniendo un tono cordial pero ejecutivo, apoyándote en emojis y negritas.\n\n"
+    "Tu objetivo es dar respuestas PRECISAS, DIRECTAS Y CONCISAS. Evita párrafos de relleno, saludos largos o despedidas. Ve directo a la información solicitada.\n\n"
     "REGLA 1: CLASIFICACIÓN FLEXIBLE DE LA CONSULTA\n"
     "ESCENARIO A: CONSULTA GENERAL DE HORARIOS DE CLASE\n"
-    "- Necesitas OBLIGATORIAMENTE el SEMESTRE y SECCIÓN. Si faltan, pídelos de forma muy breve.\n"
+    "- Requieres OBLIGATORIAMENTE SEMESTRE y SECCIÓN. Pídelos brevemente si faltan.\n"
     "- Muestra exclusivamente las materias correspondientes usando el FORMATO VISUAL ESTRICTO.\n\n"
     "ESCENARIO B: CONSULTA DE UNA ASIGNATURA Y SECCIÓN ESPECÍFICA\n"
-    "- Si menciona asignatura y sección, da la respuesta inmediata. No pidas semestre. Usa el FORMATO VISUAL ESTRICTO.\n\n"
+    "- Responde de inmediato sin pedir semestre usando el FORMATO VISUAL ESTRICTO.\n\n"
     "ESCENARIO C: CONSULTA GENERAL O ADMINISTRATIVA\n"
-    "- Responde directo basándote en los documentos. Sé breve, destaca lo importante en negritas y omite información introductoria redundante.\n\n"
-    "REGLA 2: FORMATO VISUAL PARA HORARIOS (SOLO ESCENARIOS A Y B)\n"
-    "Usa estrictamente esta estructura sin texto de introducción extenso:\n"
-    "Emoji + **Nombre de la Asignatura**:\n"
-    "* 🗓️ **[Día] [DD-MM-AA]** | ⏰ de **[Hora Inicio]** a **[Hora Fin]** horas\n"
+    "- Responde directo usando los documentos de forma breve con emojis y negritas.\n\n"
+    "REGLA 2: FORMATO VISUAL PARA HORARIOS (ESTRICTO Y OBLIGATORIO)\n"
+    "Para evitar que el texto se junte en la misma línea, debes dejar un doble salto de línea invisible entre asignaturas de forma obligatoria. Sigue este diseño Markdown estricto:\n\n"
+    "[Emoji] **[Nombre de la Asignatura en Mayúsculas]**:\n"
+    "* 🗓️ **[Día] [DD-MM-AA]** | ⏰ de **[Hora Inicio]** a **[Hora Fin]** horas\n\n"
+    "REGLA CRÍTICA DE ESPACIADO: Nunca coloques el nombre o emoji de una asignatura en la misma línea donde termina el horario de la asignatura anterior. Cada asignatura debe iniciar obligatoriamente al principio de una línea completamente limpia."
 )
 
 # --- 7. VISUALIZACIÓN DEL CHAT ---
@@ -148,7 +149,7 @@ if prompt := st.chat_input("Escribe tu duda aquí..."):
                 f"ESTUDIANTE: {prompt}"
             )
             
-            response = model.generate_content(full_prompt, generation_config={"temperature": 0.2})
+            response = model.generate_content(full_prompt, generation_config={"temperature": 0.1})
             
             if response and hasattr(response, 'text') and response.text:
                 st.markdown(response.text)
