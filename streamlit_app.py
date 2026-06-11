@@ -1,11 +1,9 @@
 import streamlit as st
 import google.generativeai as genai
-from google.generativeai import caching
 import fitz  # Para los PDFs
 import pandas as pd  # Para el Excel
 import os
 import unicodedata
-import datetime
 
 # --- 1. CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Psicobot", page_icon="🧠", layout="centered")
@@ -58,7 +56,7 @@ def obtener_modelo_flash_activo():
 
 nombre_modelo_oficial = obtener_modelo_flash_activo()
 
-# --- 5. CARGA EXTREMA DE DATOS ---
+# --- 5. CARGA DE DATOS DESDE EL REPOSITORIO ---
 @st.cache_resource(show_spinner=False)
 def cargar_documentos():
     texto_total = ""
@@ -99,7 +97,7 @@ def cargar_documentos():
                 with fitz.open(a) as doc:
                     for pagina in doc:
                         texto_total += pagina.get_text()
-                archivos_processed.append(f"📄 {a}")
+                archivos_procesados.append(f"📄 {a}")
             except: continue
             
     return texto_total, archivos_procesados
@@ -133,32 +131,10 @@ instrucciones_base = (
     "Si hay múltiples asignaturas que cumplan con el filtro del estudiante, coloca un bloque completo abajo del otro, separados exactamente por un espacio en blanco."
 )
 
-# --- 6.1 CONFIGURACIÓN DE CONTEXT CACHING ---
-@st.cache_resource(show_spinner=False)
-def crear_context_cache(contexto, instrucciones, modelo_destino):
-    bloque_conocimiento = f"{instrucciones}\n\nCONOCIMIENTO DE LA CARRERA:\n{contexto}"
-    if len(bloque_conocimiento) < 130000:
-        return None
-    try:
-        mi_cache = caching.CachedContent.create(
-            model=modelo_destino,
-            display_name='psicobot_data_cache',
-            contents=bloque_conocimiento,
-            ttl=datetime.timedelta(hours=3)
-        )
-        return mi_cache
-    except:
-        return None
-
-cache_activo = crear_context_cache(contexto_facultad, instrucciones_base, nombre_modelo_oficial)
-
 with st.sidebar:
     st.subheader("📁 Estado del Sistema")
-    st.info(f"🤖 Modelo En Línea: {nombre_modelo_oficial.split('/')[-1]}")
-    if cache_activo:
-        st.success("⚡ Caché Activo (Ahorro de créditos)")
-    else:
-        st.info("📉 Modo estándar (Optimizado de bajo consumo)")
+    st.info(f"🤖 Modelo Activo: {nombre_modelo_oficial.split('/')[-1]}")
+    st.success("🚀 Conexión de Alta Velocidad Desbloqueada")
 
 # --- 7. VISUALIZACIÓN DEL CHAT ---
 for message in st.session_state.messages:
@@ -172,23 +148,22 @@ if prompt := st.chat_input("Escribe tu duda aquí..."):
 
     with st.chat_message("assistant"):
         try:
-            # Historial ilimitado gracias a tu API Key de pago
+            # Construcción limpia de la memoria de la conversación
             historial_contexto = ""
             for msg in st.session_state.messages[:-1]:
                 rol = "Estudiante" if msg["role"] == "user" else "Psicobot"
                 historial_contexto += f"{rol}: {msg['content']}\n"
             
-            if cache_activo:
-                model = genai.GenerativeModel(model_name=nombre_modelo_oficial, cached_content=cache_activo)
-                full_prompt = f"HISTORIAL:\n{historial_contexto}\nESTUDIANTE: {prompt}"
-            else:
-                model = genai.GenerativeModel(model_name=nombre_modelo_oficial)
-                full_prompt = (
-                    f"{instrucciones_base}\n\n"
-                    f"REPOSITORIO:\n{contexto_facultad[:100000]}\n\n"
-                    f"HISTORIAL COVERSACIÓN:\n{historial_contexto}\n"
-                    f"ESTUDIANTE: {prompt}"
-                )
+            # Inicialización directa y robusta del modelo
+            model = genai.GenerativeModel(model_name=nombre_modelo_oficial)
+            
+            # Construcción del prompt completo con el repositorio inyectado directamente
+            full_prompt = (
+                f"{instrucciones_base}\n\n"
+                f"REPOSITORIO DE DATOS DE LA CARRERA:\n{contexto_facultad}\n\n"
+                f"HISTORIAL DE LA CONVERSACIÓN:\n{historial_contexto}\n"
+                f"ESTUDIANTE: {prompt}"
+            )
             
             response = model.generate_content(full_prompt, generation_config={"temperature": 0.0})
             
