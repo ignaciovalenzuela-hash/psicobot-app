@@ -49,9 +49,20 @@ else:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# --- 4. CONFIGURACIÓN DEL MODELO ULTRA-RÁPIDO ---
-# Volvemos al modelo 8B de la familia 1.5, el más rápido y de menor latencia
-nombre_modelo_oficial = 'models/gemini-1.5-flash-8b'
+# --- 4. CONFIGURACIÓN DEL MODELO DE ÚLTIMA GENERACIÓN (MÁXIMA VELOCIDAD) ---
+@st.cache_resource(show_spinner=False)
+def obtener_modelo_flash_activo():
+    try:
+        modelos_disponibles = list(genai.list_models())
+        for m in modelos_disponibles:
+            if 'generateContent' in m.supported_generation_methods and 'flash' in m.name.lower():
+                return m.name
+    except:
+        pass
+    # Forzamos por defecto el modelo de la serie 2.5 de Google
+    return 'models/gemini-2.5-flash'
+
+nombre_modelo_oficial = obtener_modelo_flash_activo()
 
 # --- 5. CARGA DE DATOS DESDE EL REPOSITORIO ---
 @st.cache_resource(show_spinner=False)
@@ -101,7 +112,7 @@ def cargar_documentos():
 
 contexto_facultad, archivos_activos = cargar_documentos()
 
-# --- 6. INSTRUCCIONES DE SISTEMA ---
+# --- 6. INSTRUCCIONES DE SISTEMA CON CONTROL DE MODALIDAD Y FORMATO BLINDADO ---
 instrucciones_base = (
     "Eres Psicobot, el asistente oficial integral de la Escuela de Psicología.\n"
     "Tu objetivo es dar respuestas PRECISAS, DIRECTAS Y CONCISAS, usando emojis y negritas, sin saludos ni despedidas largas.\n\n"
@@ -140,7 +151,7 @@ if not st.session_state.messages:
         st.info("📋 **Dudas Administrativas**\n\nEjemplo: *'Soy de Presencial Diurno, ¿me puedo eximir de los exámenes finales?'*")
     st.markdown("<br>", unsafe_allow_html=True)
 
-# --- 8. VISUALIZACIÓN DEL CHAT CON STREAMING SEGURO ---
+# --- 8. VISUALIZACIÓN DEL CHAT CON AVATARES Y MENSAJE DE ESPERA ---
 for message in st.session_state.messages:
     avatar_icon = "🎓" if message["role"] == "user" else "🧠"
     with st.chat_message(message["role"], avatar=avatar_icon):
@@ -152,37 +163,30 @@ if prompt := st.chat_input("Escribe tu duda aquí..."):
         st.markdown(prompt)
 
     with st.chat_message("assistant", avatar="🧠"):
-        try:
-            historial_contexto = ""
-            for msg in st.session_state.messages[:-1]:
-                rol = "Estudiante" if msg["role"] == "user" else "Psicobot"
-                historial_contexto += f"{rol}: {msg['content']}\n"
-            
-            model = genai.GenerativeModel(model_name=nombre_modelo_oficial)
-            
-            full_prompt = (
-                f"{instrucciones_base}\n\n"
-                f"REPOSITORIO DE DATOS DE LA CARRERA:\n{contexto_facultad}\n\n"
-                f"HISTORIAL DE LA CONVERSACIÓN:\n{historial_contexto}\n"
-                f"ESTUDIANTE: {prompt}"
-            )
-            
-            # Activamos el streaming
-            response = model.generate_content(full_prompt, generation_config={"temperature": 0.1}, stream=True)
-            
-            # Función generadora protegida
-            def stream_data():
-                for chunk in response:
-                    try:
-                        if chunk.text:
-                            yield chunk.text
-                    except Exception:
-                        pass
-            
-            # Streamlit escribe la respuesta
-            full_response = st.write_stream(stream_data())
-            
-            st.session_state.messages.append({"role": "assistant", "content": full_response})
+        # Mensaje dinámico mientras la IA genera la respuesta
+        with st.spinner("Preparando respuesta..."):
+            try:
+                historial_contexto = ""
+                for msg in st.session_state.messages[:-1]:
+                    rol = "Estudiante" if msg["role"] == "user" else "Psicobot"
+                    historial_contexto += f"{rol}: {msg['content']}\n"
                 
-        except Exception as e:
-            st.error(f"⚠️ Error detallado del sistema: {e}")
+                model = genai.GenerativeModel(model_name=nombre_modelo_oficial)
+                
+                full_prompt = (
+                    f"{instrucciones_base}\n\n"
+                    f"REPOSITORIO DE DATOS DE LA CARRERA:\n{contexto_facultad}\n\n"
+                    f"HISTORIAL DE LA CONVERSACIÓN:\n{historial_contexto}\n"
+                    f"ESTUDIANTE: {prompt}"
+                )
+                
+                response = model.generate_content(full_prompt, generation_config={"temperature": 0.1})
+                
+                if response and hasattr(response, 'text') and response.text:
+                    st.markdown(response.text)
+                    st.session_state.messages.append({"role": "assistant", "content": response.text})
+                else:
+                    st.warning("⚠️ El asistente no devolvió una respuesta válida. Intenta reformular.")
+                    
+            except Exception as e:
+                st.error(f"⚠️ Error detallado del sistema: {e}")
