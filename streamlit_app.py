@@ -41,7 +41,31 @@ else:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# --- 4. CARGA EXTREMA DE DATOS ---
+# --- 4. DETECCIÓN DINÁMICA DE MODELOS ACTIVOS ---
+@st.cache_resource(show_spinner=False)
+def obtener_modelo_flash_activo():
+    try:
+        # Le pedimos a Google la lista real de modelos compatibles con tu cuenta
+        modelos_disponibles = list(genai.list_models())
+        
+        # 1. Buscamos primero cualquier variante estable de Flash
+        for m in modelos_disponibles:
+            if 'generateContent' in m.supported_generation_methods and 'flash' in m.name.lower():
+                return m.name
+                
+        # 2. Si no encuentra "flash", elige el primero disponible que pueda chatear
+        for m in modelos_disponibles:
+            if 'generateContent' in m.supported_generation_methods:
+                return m.name
+    except:
+        pass
+    # Fallback de emergencia si el listado falla por completo
+    return 'models/gemini-1.5-flash-latest'
+
+# Ejecutamos la autodetección del modelo
+nombre_modelo_oficial = obtener_modelo_flash_activo()
+
+# --- 5. CARGA EXTREMA DE DATOS ---
 @st.cache_resource(show_spinner=False)
 def cargar_documentos():
     texto_total = ""
@@ -89,7 +113,7 @@ def cargar_documentos():
 
 contexto_facultad, archivos_activos = cargar_documentos()
 
-# --- 5. INSTRUCCIONES BASE DEL SISTEMA ---
+# --- 6. INSTRUCCIONES BASE DEL SISTEMA ---
 instrucciones_base = (
     "Eres Psicobot, el asistente oficial de Psicología.\n\n"
     "REGLA 1: VALIDACIÓN ANTES DE RESPONDER\n"
@@ -109,18 +133,18 @@ instrucciones_base = (
     "Si hay más asignaturas agendadas para esa sección, pon un bloque completo abajo del otro separado por un espacio vacío."
 )
 
-# --- 5.1 CONFIGURACIÓN DE CONTEXT CACHING ---
+# --- 6.1 CONFIGURACIÓN DE CONTEXT CACHING ---
 @st.cache_resource(show_spinner=False)
-def crear_context_cache(contexto, instrucciones):
+def crear_context_cache(contexto, instrucciones, modelo_destino):
     bloque_conocimiento = f"{instrucciones}\n\nCONOCIMIENTO DE LA CARRERA:\n{contexto}"
     
-    # El límite mínimo obligatorio de Google para activar caché es ~32k tokens (~130,000 letras)
+    # El límite mínimo obligatorio de Google para activar caché es ~130,000 letras
     if len(bloque_conocimiento) < 130000:
-        return None  # Si tus archivos son pequeños, pasa directo al modo estándar económico
+        return None
     
     try:
         mi_cache = caching.CachedContent.create(
-            model='models/gemini-1.5-flash-001',
+            model=modelo_destino,  # Usamos dinámicamente el modelo detectado
             display_name='psicobot_data_cache',
             contents=bloque_conocimiento,
             ttl=datetime.timedelta(hours=3)
@@ -129,16 +153,17 @@ def crear_context_cache(contexto, instrucciones):
     except:
         return None
 
-cache_activo = crear_context_cache(contexto_facultad, instrucciones_base)
+cache_activo = crear_context_cache(contexto_facultad, instrucciones_base, nombre_modelo_oficial)
 
 with st.sidebar:
     st.subheader("📁 Estado del Sistema")
+    st.info(f"🤖 Modelo En Línea: {nombre_modelo_oficial.split('/')[-1]}")
     if cache_activo:
         st.success("⚡ Caché Activo (Ahorro de créditos)")
     else:
         st.info("📉 Modo estándar (Optimizado de bajo consumo)")
 
-# --- 6. VISUALIZACIÓN DEL CHAT ---
+# --- 7. VISUALIZACIÓN DEL CHAT ---
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
@@ -156,13 +181,12 @@ if prompt := st.chat_input("Escribe tu duda aquí..."):
                 rol = "Estudiante" if msg["role"] == "user" else "Psicobot"
                 historial_contexto += f"{rol}: {msg['content']}\n"
             
-            # Inicialización y ejecución según disponibilidad del Caché de Google
+            # Ejecución utilizando el modelo detectado automáticamente
             if cache_activo:
-                model = genai.GenerativeModel(model_name='models/gemini-1.5-flash-001', cached_content=cache_activo)
+                model = genai.GenerativeModel(model_name=nombre_modelo_oficial, cached_content=cache_activo)
                 full_prompt = f"HISTORIAL:\n{historial_contexto}\nESTUDIANTE: {prompt}"
             else:
-                # CORREGIDO: Cambiado 'models/gemini-1.5-flash' por 'gemini-1.5-flash-001' para resolver el error 404
-                model = genai.GenerativeModel(model_name='gemini-1.5-flash-001')
+                model = genai.GenerativeModel(model_name=nombre_modelo_oficial)
                 full_prompt = (
                     f"{instrucciones_base}\n\n"
                     f"REPOSITORIO:\n{contexto_facultad[:100000]}\n\n"
@@ -173,10 +197,4 @@ if prompt := st.chat_input("Escribe tu duda aquí..."):
             response = model.generate_content(full_prompt, generation_config={"temperature": 0.0})
             
             if response and hasattr(response, 'text') and response.text:
-                st.markdown(response.text)
-                st.session_state.messages.append({"role": "assistant", "content": response.text})
-            else:
-                st.warning("⚠️ El asistente no devolvió una respuesta válida. Intenta reformular.")
-                
-        except Exception as e:
-            st.error(f"⚠️ Error detallado del sistema: {e}")
+                st.markdown
