@@ -158,12 +158,11 @@ if prompt := st.chat_input("Escribe tu duda aquí..."):
             
             # Inicialización y ejecución según disponibilidad del Caché de Google
             if cache_activo:
-                # CORREGIDO: Cambiado 'name=' por 'model_name='
                 model = genai.GenerativeModel(model_name='models/gemini-1.5-flash-001', cached_content=cache_activo)
                 full_prompt = f"HISTORIAL:\n{historial_contexto}\nESTUDIANTE: {prompt}"
             else:
-                # CORREGIDO: Eliminado system_instruction del constructor para máxima compatibilidad
-                model = genai.GenerativeModel(model_name='models/gemini-1.5-flash')
+                # CORREGIDO: Cambiado 'models/gemini-1.5-flash' por 'gemini-1.5-flash-001' para resolver el error 404
+                model = genai.GenerativeModel(model_name='gemini-1.5-flash-001')
                 full_prompt = (
                     f"{instrucciones_base}\n\n"
                     f"REPOSITORIO:\n{contexto_facultad[:100000]}\n\n"
@@ -180,5 +179,4 @@ if prompt := st.chat_input("Escribe tu duda aquí..."):
                 st.warning("⚠️ El asistente no devolvió una respuesta válida. Intenta reformular.")
                 
         except Exception as e:
-            # CORREGIDO: Ahora te dirá explícitamente en pantalla qué error técnico está ocurriendo
             st.error(f"⚠️ Error detallado del sistema: {e}")
