@@ -49,9 +49,9 @@ else:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# --- 4. CONFIGURACIÓN DEL MODELO ULTRA-RÁPIDO Y ESTABLE ---
-# Utilizamos Gemini 2.5 Flash por ser la opción más veloz y robusta disponible
-nombre_modelo_oficial = 'models/gemini-2.5-flash'
+# --- 4. CONFIGURACIÓN DEL MODELO ULTRA-RÁPIDO ---
+# Volvemos al modelo 8B de la familia 1.5, el más rápido y de menor latencia
+nombre_modelo_oficial = 'models/gemini-1.5-flash-8b'
 
 # --- 5. CARGA DE DATOS DESDE EL REPOSITORIO ---
 @st.cache_resource(show_spinner=False)
@@ -167,10 +167,10 @@ if prompt := st.chat_input("Escribe tu duda aquí..."):
                 f"ESTUDIANTE: {prompt}"
             )
             
-            # Activamos el streaming de la respuesta
+            # Activamos el streaming
             response = model.generate_content(full_prompt, generation_config={"temperature": 0.1}, stream=True)
             
-            # Función generadora para procesar los pedazos de texto de forma segura
+            # Función generadora protegida
             def stream_data():
                 for chunk in response:
                     try:
@@ -179,10 +179,9 @@ if prompt := st.chat_input("Escribe tu duda aquí..."):
                     except Exception:
                         pass
             
-            # Streamlit se encarga de escribirlo en tiempo real de forma nativa
+            # Streamlit escribe la respuesta
             full_response = st.write_stream(stream_data())
             
-            # Guardamos la respuesta completa en el historial
             st.session_state.messages.append({"role": "assistant", "content": full_response})
                 
         except Exception as e:
