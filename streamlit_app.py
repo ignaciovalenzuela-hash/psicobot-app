@@ -197,4 +197,10 @@ if prompt := st.chat_input("Escribe tu duda aquí..."):
             response = model.generate_content(full_prompt, generation_config={"temperature": 0.0})
             
             if response and hasattr(response, 'text') and response.text:
-                st.markdown
+                st.markdown(response.text)
+                st.session_state.messages.append({"role": "assistant", "content": response.text})
+            else:
+                st.warning("⚠️ El asistente no devolvió una respuesta válida. Intenta reformular.")
+                
+        except Exception as e:
+            st.error(f"⚠️ Error detallado del sistema: {e}")
