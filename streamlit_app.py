@@ -83,7 +83,6 @@ with col2:
     else:
         st.caption("🚀 Psicobot en línea")
 
-# Aplicamos las nuevas clases CSS de título y punto parpadeante
 st.markdown("<h1 class='titulo-psicobot'>Psicobot</h1>", unsafe_allow_html=True)
 st.markdown("<div class='online-indicator'><span class='dot'></span> Asistente Oficial Activo</div>", unsafe_allow_html=True)
 st.markdown("---")
@@ -153,7 +152,7 @@ def cargar_documentos():
                 with fitz.open(a) as doc:
                     for pagina in doc:
                         texto_total += pagina.get_text()
-                archivos_processed.append(f"📄 {a}")
+                archivos_procesados.append(f"📄 {a}")
             except: continue
             
     return texto_total, archivos_procesados
@@ -175,8 +174,13 @@ instrucciones_base = (
     "- Muestra exclusivamente las materias correspondientes usando el FORMATO VISUAL ESTRICTO.\n\n"
     "ESCENARIO B: CONSULTA DE UNA ASIGNATURA Y SECCIÓN ESPECÍFICA\n"
     "- Responde de inmediato sin pedir semestre usando el FORMATO VISUAL ESTRICTO.\n\n"
-    "ESCENARIO C: CONSULTA GENERAL O ADMINISTRATIVA\n"
-    "- Responde de forma directa basándote en los documentos. CRÍTICO: Aplica el reglamento específico según la modalidad del alumno (ej: recuerda que la eximición de exámenes aplica SOLO a la modalidad presencial y NO a la semipresencial).\n\n"
+    "ESCENARIO C: CONSULTA DE TOMA DE RAMOS / INSCRIPCIÓN DE ASIGNATURAS\n"
+    "- Si el alumno pregunta por fechas de inscripción de asignaturas o toma de ramos, filtra estrictamente por su modalidad.\n"
+    "- CRÍTICO PARA SEMIPRESENCIAL: Si es semipresencial, verifica si pertenece a las Cohortes 2025-2026 o a las Cohortes 2024 y anteriores, ya que tienen horarios diferentes. Si no lo detalla, pídelo brevemente.\n"
+    "- Muestra la fecha correspondiente, el bloque horario de inicio/término y añade obligatoriamente la fecha que le corresponde para 'Modificación a la inscripción de asignatura y rezagados' de su respectiva modalidad.\n"
+    "- Usa un formato limpio con emojis (ej: 📅 **FECHA**, ⏰ **HORARIO**).\n\n"
+    "ESCENARIO D: CONSULTA GENERAL O ADMINISTRATIVA\n"
+    "- Responde de forma directo basándote en los documentos. CRÍTICO: Aplica el reglamento específico según la modalidad del alumno (ej: recuerda que la eximición de exámenes aplica SOLO a la modalidad presencial y NO a la semipresencial).\n\n"
     "REGLA 2: FORMATO VISUAL PARA HORARIOS (SOLO ESCENARIOS A Y B - ESTRICTO)\n"
     "Para evitar que las materias se junten en la misma línea, debes estructurar la lista dejando obligatoriamente una línea en blanco (doble salto de línea) entre el final de una asignatura y el inicio de la siguiente. Sigue este ejemplo exacto de espaciado:\n\n"
     "🧠 **ELEMENTOS DE NEUROCIENCIA**:\n"
@@ -196,7 +200,7 @@ if not st.session_state.messages:
     with colA:
         st.info("📅 **Horarios de Clases**\n\nEjemplo: *'Soy de Semipresencial, 1er semestre, sección 336. ¿Cuándo tengo clases?'*")
     with colB:
-        st.info("📋 **Dudas Administrativas**\n\nEjemplo: *'Soy de Presencial Diurno, ¿me puedo eximir de los exámenes finales?'*")
+        st.info("📋 **Dudas Administrativas**\n\nEjemplo: *'Soy de Presencial Diurno, ¿cuándo me toca inscribir asignaturas?'*")
     st.markdown("<br>", unsafe_allow_html=True)
 
 # --- 8. VISUALIZACIÓN DEL CHAT CON AVATARES Y MENSAJE DE ESPERA ---
