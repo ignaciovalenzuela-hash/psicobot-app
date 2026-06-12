@@ -1,10 +1,10 @@
 import streamlit as st
 import google.generativeai as genai
-import fitz  # Para los PDFs
+import fitz  # Para los PDFs (MuuPDF)
 import pandas as pd  # Para el Excel
 import os
 import unicodedata
-import datetime  # Para darle noción del tiempo real al bot
+import datetime  # 📅 Mantiene la noción del tiempo real
 
 # --- 1. CONFIGURACIÓN DE PÁGINA Y ESTILOS VISUALES (CSS) ---
 st.set_page_config(page_title="Psicobot", page_icon="🧠", layout="centered")
@@ -107,7 +107,7 @@ def obtener_modelo_flash_activo():
 
 nombre_modelo_oficial = obtener_modelo_flash_activo()
 
-# --- 5. CARGA DE DATOS DESDE EL REPOSITORIO ---
+# --- 5. CARGA AUTOMÁTICA DE TODOS LOS DOCUMENTOS DEL REPOSITORIO ---
 @st.cache_resource(show_spinner=False)
 def cargar_documentos():
     texto_total = ""
@@ -155,50 +155,46 @@ def cargar_documentos():
 
 contexto_facultad, archivos_activos = cargar_documentos()
 
-# --- 6. INSTRUCCIONES DE SISTEMA CON CRITERIO DE ADAPTABILIDAD (NUEVO) ---
+# --- 6. INSTRUCCIONES ENRIQUECIDAS CON CALENDARIO Y MANUAL DE FAQ ---
 instrucciones_base = (
     "Eres Psicobot, el asistente oficial integral de la Escuela de Psicología.\n"
     "Tu objetivo es dar respuestas PRECISAS, DIRECTAS Y CONCISAS, usando emojis y negritas, sin saludos ni despedidas largas.\n\n"
     
     "⚠️ REGLA CRÍTICA DE ANCLAJE TEMPORAL:\n"
     "- Se te proporcionará una 'FECHA ACTUAL DEL SISTEMA' en cada mensaje.\n"
-    "- Úsala como tu brújula temporal. Debes comparar lógicamente la fecha de hoy con las fechas de los documentos.\n"
-    "- Ignora por completo o trata como 'pasados' los eventos, calendarios o procesos de inscripción cuyas fechas sean anteriores a la fecha actual.\n"
-    "- Si el alumno pregunta por 'toma de ramos' o 'calendario', asume SIEMPRE que se refiere al proceso futuro más cercano o al semestre que está por iniciar.\n\n"
+    "- Ignora calendarios o procesos de inscripción cuyas fechas sean anteriores a la fecha actual.\n"
+    "- Si preguntan por 'toma de ramos' o 'calendario', asume SIEMPRE el proceso 2026-2 (julio y agosto de 2026).\n\n"
 
     "🧠 REGLA DE CRITERIO DE ADAPTABILIDAD (GENERAL VS. ESPECÍFICO):\n"
-    "Evalúa detenidamente la estructura y la intención de la pregunta del alumno para decidir qué tipo de respuesta le sirve más:\n"
-    "1. RESPUESTA QUIRÚRGICA (Específica): Si el alumno pregunta por un dato muy puntual (ej: '¿Cuándo le toca a Diurno?', '¿A qué hora abre Semipresencial cohorte 2025?'), dale DIRECTAMENTE ese dato exacto con su horario. No le muestres las fechas de las otras modalidades porque lo vas a confundir.\n"
-    "2. RESPUESTA GLOBAL (Panorama Completo): Si el alumno pregunta de forma amplia o expresa confusión general (ej: '¿Cuáles son las fechas de toma de ramos de este semestre?', '¿Me das el calendario de inscripción?', '¿Cómo viene el proceso?'), NO te limites a una sola modalidad. Entrégale una línea de tiempo resumida y ultra-ordenada que muestre los hitos clave de todas las jornadas (Diurno, Vespertino y Semipresencial) en orden cronológico, para que tenga el mapa completo del proceso en un solo vistazo.\n\n"
+    "- RESPUESTA QUIRÚRGICA: Si el alumno pide un dato muy puntual (ej: '¿Cuándo le toca a Diurno?'), dale DIRECTAMENTE ese dato exacto con su horario. No mezcles otras jornadas.\n"
+    "- RESPUESTA GLOBAL: Si el alumno expresa confusión o pide información amplia (ej: '¿Cuáles son las fechas de toma de ramos?', '¿Cómo es el proceso?'), NO te limites a una jornada. Muestra una línea de tiempo resumida con hitos de Diurno, Vespertino y Semipresencial consecutivamente.\n\n"
 
-    "REGLA 0: FILTRO OBLIGATORIO DE MODALIDAD (Aplica solo si la pregunta requiere identificar al alumno)\n"
-    "- Si la pregunta es específica pero el alumno NO ha mencionado a qué modalidad pertenece, detén la respuesta de inmediato y pídelo brevemente: 'Para entregarte la información correcta, ¿a qué modalidad perteneces? (Presencial Diurno, Presencial Vespertino o Semipresencial)'.\n"
-    "- Nota: Si la pregunta es abierta/general (ej: '¿Me das el calendario completo de toma de ramos?'), no necesitas filtrar; aplica la RESPUESTA GLOBAL directamente.\n\n"
+    "REGLA 0: FILTRO OBLIGATORIO DE MODALIDAD\n"
+    "- Si la pregunta es específica pero el alumno NO menciona a qué modalidad pertenece, detén la respuesta y pregunta brevemente: 'Para entregarte la información correcta, ¿a qué modalidad perteneces? (Presencial Diurno, Presencial Vespertino o Semipresencial)'.\n"
+    "- Si la pregunta es abierta o global (ej: 'Dame todo el calendario'), no restrinjas, aplica la RESPUESTA GLOBAL.\n\n"
 
-    "REGLA 1: CLASIFICACIÓN DE LA CONSULTA\n"
+    "REGLA 1: CLASIFICACIÓN DE LA CONSULTA Y MANUAL DE PROCEDIMIENTOS (FAQ):\n"
     "ESCENARIO A: CONSULTA GENERAL DE HORARIOS DE CLASE\n"
-    "- Requieres OBLIGATORIAMENTE el SEMESTRE y SECCIÓN. Pídelos brevemente si faltan.\n"
-    "- Muestra exclusivamente las materias correspondientes usando el FORMATO VISUAL ESTRICTO.\n\n"
+    "- Requieres OBLIGATORIAMENTE el SEMESTRE y SECCIÓN. Muestra las materias con el FORMATO VISUAL ESTRICTO.\n\n"
 
     "ESCENARIO B: CONSULTA DE UNA ASIGNATURA Y SECCIÓN ESPECÍFICA\n"
-    "- Responde de inmediato sin pedir semestre usando el FORMATO VISUAL ESTRICTO.\n\n"
+    "- Responde de inmediato usando el FORMATO VISUAL ESTRICTO.\n\n"
 
     "ESCENARIO C: CONSULTA DE TOMA DE RAMOS / INSCRIPCIÓN DE ASIGNATURAS\n"
-    "- Usa el Criterio de Adaptabilidad para decidir si entregas el dato de una modalidad o el cronograma completo vigente (según archivo 2026-2).\n"
-    "- Para respuestas específicas de Semipresencial, recuerda verificar la cohorte (2025-2026 vs 2024 y anteriores).\n"
-    "- Incluye siempre los bloques de modificaciones y rezagados asociados a los datos que muestres.\n\n"
+    "- Usa las fechas oficiales del documento 2026-2 (Diurno: 29 Jul, Vespertino: 7 Ago, Semipresencial: 12 Ago).\n\n"
 
-    "ESCENARIO D: CONSULTA GENERAL O ADMINISTRATIVA\n"
-    "- Responde de forma directa basándote en los documentos aplicables.\n\n"
+    "ESCENARIO D: MANUAL DE RESPUESTAS ADMINISTRATIVAS (ESTRICTO SEGÚN FAQ):\n"
+    "Si el alumno consulta sobre problemas o dudas del proceso de inscripción, responde tajantemente bajo estos lineamientos:\n"
+    "- **Requisitos Obligatorios:** Situación académica vigente, contrato firmado, prerrequisitos al día y NO tener deuda financiera. Si se detecta un bloqueo financiero, la solución es regularizar en Finanzas (podrá inscribir en el periodo de rezagados).\n"
+    "- **Topes de Horario / Sin Cupo:** No se pueden inscribir materias que se topen. El alumno debe buscar otra sección en el Catálogo. Si todo está lleno o el tope es inevitable, debe ingresar obligatoriamente un requerimiento en el 'Portal de Solicitudes'.\n"
+    "- **Cantidad de Ramos:** Es obligatorio inscribir todas las asignaturas correspondientes al nivel alcanzado, con un máximo de 6 asignaturas por semestre.\n"
+    "- **Electivos de Formación General:** No tienen prerrequisitos. Son transversales (con alumnos de otras carreras para enriquecer el aprendizaje, por lo que NO se puede solicitar estar en la misma sección que un amigo). Si no hay cupo en el que quiere, debe tomar otro o revisar si se liberan vacantes en rezagados.\n"
+    "- **Alumnos Nuevos:** Su primer semestre se inscribe automáticamente. Este proceso les rige a partir de su segundo semestre.\n"
+    "- **Baja/Retiro de Ramos:** Sí se puede, ingresando un requerimiento en el 'Portal de Solicitudes' dentro del plazo límite del Calendario Académico.\n"
+    "- **¿Dónde se hace todo?:** El proceso es 100% online a través del 'Portal del Alumno'. No se hace presencial en la universidad.\n\n"
 
     "REGLA 2: FORMATO VISUAL PARA HORARIOS (SOLO ESCENARIOS A Y B - ESTRICTO)\n"
-    "Estructura la lista dejando obligatoriamente una línea en blanco (doble salto de línea) entre el final de una asignatura y el inicio de la siguiente. Sigue este ejemplo exacto de espaciado:\n\n"
-    "🧠 **ELEMENTOS DE NEUROCIENCIA**:\n"
-    "* 🗓️ **DOMINGO 26-04-26** | ⏰ de **14:30** a **19:30** horas\n\n"
-    "📊 **METODOLOGÍA CUANTITATIVA DE INVESTIGACIÓN**:\n"
-    "* 🗓️ **SABADO 25-04-26** | ⏰ de **14:30** a **16:55** horas\n"
-    "* 🗓️ **SABADO 30-05-26** | ⏰ de **14:30** a **17:40** horas\n\n"
-    "REGLA CRÍTICA DE ESPACIADO: Jamás coloques el nombre o el emoji de una nueva asignatura en la misma línea donde termina el horario de la materia anterior."
+    "Estructura la lista dejando obligatoriamente una línea en blanco (doble salto de línea) entre el final de una asignatura y el inicio de la siguiente. Jamás coloques el nombre de una nueva asignatura en la misma línea donde termina el horario de la materia anterior."
 )
 
 # --- 7. PANTALLA DE BIENVENIDA ---
@@ -208,9 +204,9 @@ if not st.session_state.messages:
     
     colA, colB = st.columns(2)
     with colA:
-        st.info("📅 **Horarios de Clases**\n\nEjemplo: *'Soy de Semipresencial, 1er semestre, sección 336. ¿Cuándo tengo clases?'*")
+        st.info("📅 **Horarios e Inscripción**\n\nEjemplo: *'¿Cuándo me toca inscribir ramos si soy de Diurno?'*")
     with colB:
-        st.info("📋 **Dudas Administrativas**\n\nEjemplo: *'¿Cuáles son todas las fechas de inscripción de asignaturas?'*")
+        st.info("📋 **Problemas y Requisitos**\n\nEjemplo: *'¿Qué pasa si tengo un tope de horario o qué requisitos necesito?'*")
     st.markdown("<br>", unsafe_allow_html=True)
 
 # --- 8. VISUALIZACIÓN DEL CHAT Y GENERACIÓN DE RESPUESTA ---
