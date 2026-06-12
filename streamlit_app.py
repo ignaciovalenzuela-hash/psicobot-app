@@ -8,13 +8,60 @@ import unicodedata
 # --- 1. CONFIGURACIÓN DE PÁGINA Y ESTILOS VISUALES (CSS) ---
 st.set_page_config(page_title="Psicobot", page_icon="🧠", layout="centered")
 
-# Inyección de CSS para limpiar la interfaz y darle look de App
+# Inyección de CSS para limpiar la interfaz y aplicar mejoras visuales modernas
 st.markdown("""
 <style>
     /* Ocultar el menú superior y el footer de Streamlit */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
+
+    /* 1. Efecto Elevación (Hover) en las tarjetas de bienvenida */
+    div[data-testid="stNotification"] {
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        border-radius: 10px;
+    }
+    div[data-testid="stNotification"]:hover {
+        transform: translateY(-4px); /* Eleva sutilmente la tarjeta */
+        box-shadow: 0px 10px 25px rgba(0, 0, 0, 0.1); /* Sombra elegante */
+    }
+
+    /* 2. Gradiente Académico-Tech para el título principal */
+    .titulo-psicobot {
+        background: linear-gradient(45deg, #1e3d59, #17b890);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        text-align: center;
+        font-weight: 800;
+        font-size: 3rem;
+        margin-bottom: 0rem;
+    }
+
+    /* 3. Indicador dinámico de "Bot en Línea" */
+    .online-indicator {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 8px;
+        color: #555;
+        font-size: 0.92rem;
+        margin-top: -5px;
+        margin-bottom: 15px;
+        font-weight: 500;
+    }
+    .dot {
+        height: 9px;
+        width: 9px;
+        background-color: #17b890;
+        border-radius: 50%;
+        display: inline-block;
+        animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+        0% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(23, 184, 144, 0.7); }
+        70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(23, 184, 144, 0); }
+        100% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(23, 184, 144, 0); }
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -28,7 +75,7 @@ def limpiar_celda_texto(val):
     if texto.endswith('.0'): texto = texto[:-2]
     return texto
 
-# --- 2. LOGO Y ENCABEZADO ---
+# --- 2. LOGO Y ENCABEZADO CON ESTILOS INYECTADOS ---
 col1, col2, col3 = st.columns([1, 1.2, 1])
 with col2:
     if os.path.exists("logo.png"):
@@ -36,7 +83,9 @@ with col2:
     else:
         st.caption("🚀 Psicobot en línea")
 
-st.markdown("<h1 style='text-align: center;'>Psicobot</h1>", unsafe_allow_html=True)
+# Aplicamos las nuevas clases CSS de título y punto parpadeante
+st.markdown("<h1 class='titulo-psicobot'>Psicobot</h1>", unsafe_allow_html=True)
+st.markdown("<div class='online-indicator'><span class='dot'></span> Asistente Oficial Activo</div>", unsafe_allow_html=True)
 st.markdown("---")
 
 # --- 3. CONFIGURACIÓN DE API ---
@@ -59,7 +108,6 @@ def obtener_modelo_flash_activo():
                 return m.name
     except:
         pass
-    # Forzamos por defecto el modelo de la serie 2.5 de Google
     return 'models/gemini-2.5-flash'
 
 nombre_modelo_oficial = obtener_modelo_flash_activo()
@@ -105,7 +153,7 @@ def cargar_documentos():
                 with fitz.open(a) as doc:
                     for pagina in doc:
                         texto_total += pagina.get_text()
-                archivos_procesados.append(f"📄 {a}")
+                archivos_processed.append(f"📄 {a}")
             except: continue
             
     return texto_total, archivos_procesados
@@ -163,7 +211,6 @@ if prompt := st.chat_input("Escribe tu duda aquí..."):
         st.markdown(prompt)
 
     with st.chat_message("assistant", avatar="🧠"):
-        # Mensaje dinámico mientras la IA genera la respuesta
         with st.spinner("Preparando respuesta..."):
             try:
                 historial_contexto = ""
