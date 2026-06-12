@@ -4,29 +4,26 @@ import fitz  # Para los PDFs
 import pandas as pd  # Para el Excel
 import os
 import unicodedata
+import datetime  # Para darle noción del tiempo real al bot
 
 # --- 1. CONFIGURACIÓN DE PÁGINA Y ESTILOS VISUALES (CSS) ---
 st.set_page_config(page_title="Psicobot", page_icon="🧠", layout="centered")
 
-# Inyección de CSS para limpiar la interfaz y aplicar mejoras visuales modernas
 st.markdown("""
 <style>
-    /* Ocultar el menú superior y el footer de Streamlit */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
 
-    /* 1. Efecto Elevación (Hover) en las tarjetas de bienvenida */
     div[data-testid="stNotification"] {
         transition: transform 0.3s ease, box-shadow 0.3s ease;
         border-radius: 10px;
     }
     div[data-testid="stNotification"]:hover {
-        transform: translateY(-4px); /* Eleva sutilmente la tarjeta */
-        box-shadow: 0px 10px 25px rgba(0, 0, 0, 0.1); /* Sombra elegante */
+        transform: translateY(-4px);
+        box-shadow: 0px 10px 25px rgba(0, 0, 0, 0.1);
     }
 
-    /* 2. Gradiente Académico-Tech para el título principal */
     .titulo-psicobot {
         background: linear-gradient(45deg, #1e3d59, #17b890);
         -webkit-background-clip: text;
@@ -37,7 +34,6 @@ st.markdown("""
         margin-bottom: 0rem;
     }
 
-    /* 3. Indicador dinámico de "Bot en Línea" */
     .online-indicator {
         display: flex;
         justify-content: center;
@@ -75,7 +71,7 @@ def limpiar_celda_texto(val):
     if texto.endswith('.0'): texto = texto[:-2]
     return texto
 
-# --- 2. LOGO Y ENCABEZADO CON ESTILOS INYECTADOS ---
+# --- 2. LOGO Y ENCABEZADO ---
 col1, col2, col3 = st.columns([1, 1.2, 1])
 with col2:
     if os.path.exists("logo.png"):
@@ -97,7 +93,7 @@ else:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# --- 4. CONFIGURACIÓN DEL MODELO DE ÚLTIMA GENERACIÓN (MÁXIMA VELOCIDAD) ---
+# --- 4. CONFIGURACIÓN DEL MODELO ---
 @st.cache_resource(show_spinner=False)
 def obtener_modelo_flash_activo():
     try:
@@ -159,39 +155,53 @@ def cargar_documentos():
 
 contexto_facultad, archivos_activos = cargar_documentos()
 
-# --- 6. INSTRUCCIONES DE SISTEMA CON CONTROL DE MODALIDAD Y FORMATO BLINDADO ---
+# --- 6. INSTRUCCIONES DE SISTEMA CON CRITERIO DE ADAPTABILIDAD (NUEVO) ---
 instrucciones_base = (
     "Eres Psicobot, el asistente oficial integral de la Escuela de Psicología.\n"
     "Tu objetivo es dar respuestas PRECISAS, DIRECTAS Y CONCISAS, usando emojis y negritas, sin saludos ni despedidas largas.\n\n"
-    "REGLA 0: FILTRO OBLIGATORIO DE MODALIDAD (CRÍTICA)\n"
-    "- En la carrera existen dos modalidades principales: 1) Presencial (que se divide en Diurno y Vespertino) y 2) Semipresencial.\n"
-    "- Antes de responder CUALQUIER consulta de horarios o de lineamientos administrativos, revisa el historial. Si el alumno NO ha mencionado de forma explícita a qué modalidad pertenece, debes detenerte inmediatamente y pedirle que te lo indique. \n"
-    "- Haz la pregunta de forma muy breve, por ejemplo: 'Para entregarte la información correcta, ¿a qué modalidad perteneces? (Presencial Diurno, Presencial Vespertino o Semipresencial)'.\n"
-    "- Si el alumno ya lo mencionó o lo deduces con total certeza por los datos provistos (ej. si da una sección semipresencial), procede con las siguientes reglas.\n\n"
-    "REGLA 1: CLASIFICACIÓN DE LA CONSULTA (UNA VEZ SABIENDO LA MODALIDAD)\n"
+    
+    "⚠️ REGLA CRÍTICA DE ANCLAJE TEMPORAL:\n"
+    "- Se te proporcionará una 'FECHA ACTUAL DEL SISTEMA' en cada mensaje.\n"
+    "- Úsala como tu brújula temporal. Debes comparar lógicamente la fecha de hoy con las fechas de los documentos.\n"
+    "- Ignora por completo o trata como 'pasados' los eventos, calendarios o procesos de inscripción cuyas fechas sean anteriores a la fecha actual.\n"
+    "- Si el alumno pregunta por 'toma de ramos' o 'calendario', asume SIEMPRE que se refiere al proceso futuro más cercano o al semestre que está por iniciar.\n\n"
+
+    "🧠 REGLA DE CRITERIO DE ADAPTABILIDAD (GENERAL VS. ESPECÍFICO):\n"
+    "Evalúa detenidamente la estructura y la intención de la pregunta del alumno para decidir qué tipo de respuesta le sirve más:\n"
+    "1. RESPUESTA QUIRÚRGICA (Específica): Si el alumno pregunta por un dato muy puntual (ej: '¿Cuándo le toca a Diurno?', '¿A qué hora abre Semipresencial cohorte 2025?'), dale DIRECTAMENTE ese dato exacto con su horario. No le muestres las fechas de las otras modalidades porque lo vas a confundir.\n"
+    "2. RESPUESTA GLOBAL (Panorama Completo): Si el alumno pregunta de forma amplia o expresa confusión general (ej: '¿Cuáles son las fechas de toma de ramos de este semestre?', '¿Me das el calendario de inscripción?', '¿Cómo viene el proceso?'), NO te limites a una sola modalidad. Entrégale una línea de tiempo resumida y ultra-ordenada que muestre los hitos clave de todas las jornadas (Diurno, Vespertino y Semipresencial) en orden cronológico, para que tenga el mapa completo del proceso en un solo vistazo.\n\n"
+
+    "REGLA 0: FILTRO OBLIGATORIO DE MODALIDAD (Aplica solo si la pregunta requiere identificar al alumno)\n"
+    "- Si la pregunta es específica pero el alumno NO ha mencionado a qué modalidad pertenece, detén la respuesta de inmediato y pídelo brevemente: 'Para entregarte la información correcta, ¿a qué modalidad perteneces? (Presencial Diurno, Presencial Vespertino o Semipresencial)'.\n"
+    "- Nota: Si la pregunta es abierta/general (ej: '¿Me das el calendario completo de toma de ramos?'), no necesitas filtrar; aplica la RESPUESTA GLOBAL directamente.\n\n"
+
+    "REGLA 1: CLASIFICACIÓN DE LA CONSULTA\n"
     "ESCENARIO A: CONSULTA GENERAL DE HORARIOS DE CLASE\n"
     "- Requieres OBLIGATORIAMENTE el SEMESTRE y SECCIÓN. Pídelos brevemente si faltan.\n"
     "- Muestra exclusivamente las materias correspondientes usando el FORMATO VISUAL ESTRICTO.\n\n"
+
     "ESCENARIO B: CONSULTA DE UNA ASIGNATURA Y SECCIÓN ESPECÍFICA\n"
     "- Responde de inmediato sin pedir semestre usando el FORMATO VISUAL ESTRICTO.\n\n"
+
     "ESCENARIO C: CONSULTA DE TOMA DE RAMOS / INSCRIPCIÓN DE ASIGNATURAS\n"
-    "- Si el alumno pregunta por fechas de inscripción de asignaturas o toma de ramos, filtra estrictamente por su modalidad.\n"
-    "- CRÍTICO PARA SEMIPRESENCIAL: Si es semipresencial, verifica si pertenece a las Cohortes 2025-2026 o a las Cohortes 2024 y anteriores, ya que tienen horarios diferentes. Si no lo detalla, pídelo brevemente.\n"
-    "- Muestra la fecha correspondiente, el bloque horario de inicio/término y añade obligatoriamente la fecha que le corresponde para 'Modificación a la inscripción de asignatura y rezagados' de su respectiva modalidad.\n"
-    "- Usa un formato limpio con emojis (ej: 📅 **FECHA**, ⏰ **HORARIO**).\n\n"
+    "- Usa el Criterio de Adaptabilidad para decidir si entregas el dato de una modalidad o el cronograma completo vigente (según archivo 2026-2).\n"
+    "- Para respuestas específicas de Semipresencial, recuerda verificar la cohorte (2025-2026 vs 2024 y anteriores).\n"
+    "- Incluye siempre los bloques de modificaciones y rezagados asociados a los datos que muestres.\n\n"
+
     "ESCENARIO D: CONSULTA GENERAL O ADMINISTRATIVA\n"
-    "- Responde de forma directo basándote en los documentos. CRÍTICO: Aplica el reglamento específico según la modalidad del alumno (ej: recuerda que la eximición de exámenes aplica SOLO a la modalidad presencial y NO a la semipresencial).\n\n"
+    "- Responde de forma directa basándote en los documentos aplicables.\n\n"
+
     "REGLA 2: FORMATO VISUAL PARA HORARIOS (SOLO ESCENARIOS A Y B - ESTRICTO)\n"
-    "Para evitar que las materias se junten en la misma línea, debes estructurar la lista dejando obligatoriamente una línea en blanco (doble salto de línea) entre el final de una asignatura y el inicio de la siguiente. Sigue este ejemplo exacto de espaciado:\n\n"
+    "Estructura la lista dejando obligatoriamente una línea en blanco (doble salto de línea) entre el final de una asignatura y el inicio de la siguiente. Sigue este ejemplo exacto de espaciado:\n\n"
     "🧠 **ELEMENTOS DE NEUROCIENCIA**:\n"
     "* 🗓️ **DOMINGO 26-04-26** | ⏰ de **14:30** a **19:30** horas\n\n"
     "📊 **METODOLOGÍA CUANTITATIVA DE INVESTIGACIÓN**:\n"
     "* 🗓️ **SABADO 25-04-26** | ⏰ de **14:30** a **16:55** horas\n"
     "* 🗓️ **SABADO 30-05-26** | ⏰ de **14:30** a **17:40** horas\n\n"
-    "REGLA CRÍTICA DE ESPACIADO: Jamás coloques el nombre o el emoji de una nueva asignatura en la misma línea donde termina el horario de la materia anterior. Cada materia debe iniciar obligatoriamente al principio de un renglón completamente limpio."
+    "REGLA CRÍTICA DE ESPACIADO: Jamás coloques el nombre o el emoji de una nueva asignatura en la misma línea donde termina el horario de la materia anterior."
 )
 
-# --- 7. PANTALLA DE BIENVENIDA (Aparece solo si no hay mensajes) ---
+# --- 7. PANTALLA DE BIENVENIDA ---
 if not st.session_state.messages:
     st.markdown("<h3 style='text-align: center; color: #2e6c80;'>¡Hola! Estoy aquí para ayudarte 🤖</h3>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center;'>Puedes preguntarme sobre tus horarios o procesos de la carrera.</p>", unsafe_allow_html=True)
@@ -200,10 +210,10 @@ if not st.session_state.messages:
     with colA:
         st.info("📅 **Horarios de Clases**\n\nEjemplo: *'Soy de Semipresencial, 1er semestre, sección 336. ¿Cuándo tengo clases?'*")
     with colB:
-        st.info("📋 **Dudas Administrativas**\n\nEjemplo: *'Soy de Presencial Diurno, ¿cuándo me toca inscribir asignaturas?'*")
+        st.info("📋 **Dudas Administrativas**\n\nEjemplo: *'¿Cuáles son todas las fechas de inscripción de asignaturas?'*")
     st.markdown("<br>", unsafe_allow_html=True)
 
-# --- 8. VISUALIZACIÓN DEL CHAT CON AVATARES Y MENSAJE DE ESPERA ---
+# --- 8. VISUALIZACIÓN DEL CHAT Y GENERACIÓN DE RESPUESTA ---
 for message in st.session_state.messages:
     avatar_icon = "🎓" if message["role"] == "user" else "🧠"
     with st.chat_message(message["role"], avatar=avatar_icon):
@@ -222,10 +232,15 @@ if prompt := st.chat_input("Escribe tu duda aquí..."):
                     rol = "Estudiante" if msg["role"] == "user" else "Psicobot"
                     historial_contexto += f"{rol}: {msg['content']}\n"
                 
+                # Obtención de la fecha actual
+                hoy = datetime.date.today()
+                fecha_actual_sistema = hoy.strftime("%A, %d de %B de %Y")
+                
                 model = genai.GenerativeModel(model_name=nombre_modelo_oficial)
                 
                 full_prompt = (
                     f"{instrucciones_base}\n\n"
+                    f"⏰ FECHA ACTUAL DEL SISTEMA (HOY ES): {fecha_actual_sistema}\n\n"
                     f"REPOSITORIO DE DATOS DE LA CARRERA:\n{contexto_facultad}\n\n"
                     f"HISTORIAL DE LA CONVERSACIÓN:\n{historial_contexto}\n"
                     f"ESTUDIANTE: {prompt}"
