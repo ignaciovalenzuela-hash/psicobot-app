@@ -1,62 +1,84 @@
 import streamlit as st
 import google.generativeai as genai
-import fitz  # Para los PDFs (MuuPDF)
+import fitz  # Para los PDFs
 import pandas as pd  # Para el Excel
 import os
 import unicodedata
-import datetime  # 📅 Mantiene la noción del tiempo real
+import datetime  # Mantiene la noción del tiempo real
 
-# --- 1. CONFIGURACIÓN DE PÁGINA Y ESTILOS VISUALES (CSS) ---
+# --- 1. CONFIGURACIÓN DE PÁGINA Y ESTILOS VISUALES PERSONALIZADOS (CSS) ---
 st.set_page_config(page_title="Psicobot", page_icon="🧠", layout="centered")
 
+# Inyección de la nueva paleta de colores: #ff89c9 y #cc609b
 st.markdown("""
 <style>
+    /* Ocultar elementos nativos de Streamlit */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
 
-    div[data-testid="stNotification"] {
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
-        border-radius: 10px;
-    }
-    div[data-testid="stNotification"]:hover {
-        transform: translateY(-4px);
-        box-shadow: 0px 10px 25px rgba(0, 0, 0, 0.1);
-    }
-
+    /* Gradiente personalizado para el título con los nuevos colores */
     .titulo-psicobot {
-        background: linear-gradient(45deg, #1e3d59, #17b890);
+        background: linear-gradient(45deg, #cc609b, #ff89c9);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         text-align: center;
         font-weight: 800;
-        font-size: 3rem;
+        font-size: 3.2rem;
         margin-bottom: 0rem;
     }
 
+    /* Indicador dinámico "Bot en Línea" adaptado a la nueva paleta */
     .online-indicator {
         display: flex;
         justify-content: center;
         align-items: center;
         gap: 8px;
         color: #555;
-        font-size: 0.92rem;
+        font-size: 0.95rem;
         margin-top: -5px;
-        margin-bottom: 15px;
+        margin-bottom: 25px;
         font-weight: 500;
     }
     .dot {
-        height: 9px;
-        width: 9px;
-        background-color: #17b890;
+        height: 10px;
+        width: 10px;
+        background-color: #ff89c9;
         border-radius: 50%;
         display: inline-block;
         animation: pulse 2s infinite;
     }
     @keyframes pulse {
-        0% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(23, 184, 144, 0.7); }
-        70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(23, 184, 144, 0); }
-        100% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(23, 184, 144, 0); }
+        0% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 137, 201, 0.7); }
+        70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(255, 137, 201, 0); }
+        100% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 137, 201, 0); }
+    }
+
+    /* Tarjetas de bienvenida personalizadas (Complementarias al fondo blanco) */
+    .welcome-card {
+        background-color: #ffffff;
+        border-left: 5px solid #cc609b;
+        padding: 18px;
+        border-radius: 8px;
+        box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.05);
+        margin-bottom: 15px;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .welcome-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0px 8px 20px rgba(204, 96, 155, 0.15);
+        border-left: 5px solid #ff89c9;
+    }
+    .welcome-card h4 {
+        color: #cc609b;
+        margin-top: 0;
+        margin-bottom: 8px;
+        font-weight: 700;
+    }
+    .welcome-card p {
+        color: #444444;
+        font-size: 0.92rem;
+        margin: 0;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -77,7 +99,7 @@ with col2:
     if os.path.exists("logo.png"):
         st.image("logo.png", use_container_width=True)
     else:
-        st.caption("🚀 Psicobot en línea")
+        st.caption("🧠 Psicobot en línea")
 
 st.markdown("<h1 class='titulo-psicobot'>Psicobot</h1>", unsafe_allow_html=True)
 st.markdown("<div class='online-indicator'><span class='dot'></span> Asistente Oficial Activo</div>", unsafe_allow_html=True)
@@ -107,7 +129,7 @@ def obtener_modelo_flash_activo():
 
 nombre_modelo_oficial = obtener_modelo_flash_activo()
 
-# --- 5. CARGA AUTOMÁTICA DE TODOS LOS DOCUMENTOS DEL REPOSITORIO ---
+# --- 5. CARGA AUTOMÁTICA DE DOCUMENTOS ---
 @st.cache_resource(show_spinner=False)
 def cargar_documentos():
     texto_total = ""
@@ -155,7 +177,7 @@ def cargar_documentos():
 
 contexto_facultad, archivos_activos = cargar_documentos()
 
-# --- 6. INSTRUCCIONES ENRIQUECIDAS CON CALENDARIO Y MANUAL DE FAQ ---
+# --- 6. INSTRUCCIONES DE SISTEMA ---
 instrucciones_base = (
     "Eres Psicobot, el asistente oficial integral de la Escuela de Psicología.\n"
     "Tu objetivo es dar respuestas PRECISAS, DIRECTAS Y CONCISAS, usando emojis y negritas, sin saludos ni despedidas largas.\n\n"
@@ -163,7 +185,7 @@ instrucciones_base = (
     "⚠️ REGLA CRÍTICA DE ANCLAJE TEMPORAL:\n"
     "- Se te proporcionará una 'FECHA ACTUAL DEL SISTEMA' en cada mensaje.\n"
     "- Ignora calendarios o procesos de inscripción cuyas fechas sean anteriores a la fecha actual.\n"
-    "- Si preguntan por 'toma de ramos' o 'calendario', asume SIEMPRE el proceso 2026-2 (julio y agosto de 2026).\n\n"
+    "- Si preguntan por 'toma de ramos' o 'calendario', asume SIEMPRE el proceso 2026-2.\n\n"
 
     "🧠 REGLA DE CRITERIO DE ADAPTABILIDAD (GENERAL VS. ESPECÍFICO):\n"
     "- RESPUESTA QUIRÚRGICA: Si el alumno pide un dato muy puntual (ej: '¿Cuándo le toca a Diurno?'), dale DIRECTAMENTE ese dato exacto con su horario. No mezcles otras jornadas.\n"
@@ -183,30 +205,40 @@ instrucciones_base = (
     "ESCENARIO C: CONSULTA DE TOMA DE RAMOS / INSCRIPCIÓN DE ASIGNATURAS\n"
     "- Usa las fechas oficiales del documento 2026-2 (Diurno: 29 Jul, Vespertino: 7 Ago, Semipresencial: 12 Ago).\n\n"
 
-    "ESCENARIO D: MANUAL DE RESPUESTAS ADMINISTRATIVAS (ESTRICTO SEGÚN FAQ):\n"
-    "Si el alumno consulta sobre problemas o dudas del proceso de inscripción, responde tajantemente bajo estos lineamientos:\n"
-    "- **Requisitos Obligatorios:** Situación académica vigente, contrato firmado, prerrequisitos al día y NO tener deuda financiera. Si se detecta un bloqueo financiero, la solución es regularizar en Finanzas (podrá inscribir en el periodo de rezagados).\n"
-    "- **Topes de Horario / Sin Cupo:** No se pueden inscribir materias que se topen. El alumno debe buscar otra sección en el Catálogo. Si todo está lleno o el tope es inevitable, debe ingresar obligatoriamente un requerimiento en el 'Portal de Solicitudes'.\n"
-    "- **Cantidad de Ramos:** Es obligatorio inscribir todas las asignaturas correspondientes al nivel alcanzado, con un máximo de 6 asignaturas por semestre.\n"
-    "- **Electivos de Formación General:** No tienen prerrequisitos. Son transversales (con alumnos de otras carreras para enriquecer el aprendizaje, por lo que NO se puede solicitar estar en la misma sección que un amigo). Si no hay cupo en el que quiere, debe tomar otro o revisar si se liberan vacantes en rezagados.\n"
-    "- **Alumnos Nuevos:** Su primer semestre se inscribe automáticamente. Este proceso les rige a partir de su segundo semestre.\n"
-    "- **Baja/Retiro de Ramos:** Sí se puede, ingresando un requerimiento en el 'Portal de Solicitudes' dentro del plazo límite del Calendario Académico.\n"
-    "- **¿Dónde se hace todo?:** El proceso es 100% online a través del 'Portal del Alumno'. No se hace presencial en la universidad.\n\n"
+    "ESCENARIO D: MANUAL DE RESPUESTAS ADMINISTRATIVAS:\n"
+    "- **Requisitos Obligatorios:** Situación académica vigente, contrato firmado, prerrequisitos al día y NO tener deuda financiera. Si hay bloqueo financiero se resuelve en Finanzas y se habilita para el periodo de rezagados.\n"
+    "- **Topes de Horario / Sin Cupo:** Buscar otra sección en el Catálogo. Si el tope es inevitable o no hay cupos, ingresar requerimiento en el 'Portal de Solicitudes'.\n"
+    "- **Cantidad de Ramos:** Máximo 6 asignaturas por semestre.\n"
+    "- **Electivos de Formación General:** No tienen prerrequisitos. Son transversales (no se puede solicitar estar en la misma sección que un compañero específico). Si no hay cupo, tomar otro o revisar en rezagados.\n"
+    "- **Alumnos Nuevos:** Su primer semestre viene inscrito automáticamente.\n"
+    "- **Baja de Ramos:** A través del 'Portal de Solicitudes' dentro del plazo límite del Calendario Académico.\n"
+    "- **Ubicación:** Proceso 100% online en el 'Portal del Alumno'.\n\n"
 
     "REGLA 2: FORMATO VISUAL PARA HORARIOS (SOLO ESCENARIOS A Y B - ESTRICTO)\n"
     "Estructura la lista dejando obligatoriamente una línea en blanco (doble salto de línea) entre el final de una asignatura y el inicio de la siguiente. Jamás coloques el nombre de una nueva asignatura en la misma línea donde termina el horario de la materia anterior."
 )
 
-# --- 7. PANTALLA DE BIENVENIDA ---
+# --- 7. PANTALLA DE BIENVENIDA CON DISEÑO EXCLUSIVO ---
 if not st.session_state.messages:
-    st.markdown("<h3 style='text-align: center; color: #2e6c80;'>¡Hola! Estoy aquí para ayudarte 🤖</h3>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center;'>Puedes preguntarme sobre tus horarios o procesos de la carrera.</p>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center; color: #cc609b;'>¡Hola! Estoy aquí para ayudarte 🤖</h3>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #555;'>Puedes preguntarme sobre tus horarios o procesos de la carrera.</p>", unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
     
     colA, colB = st.columns(2)
     with colA:
-        st.info("📅 **Horarios e Inscripción**\n\nEjemplo: *'¿Cuándo me toca inscribir ramos si soy de Diurno?'*")
+        st.markdown("""
+        <div class="welcome-card">
+            <h4>📅 Horarios e Inscripción</h4>
+            <p>Ejemplo: <i>"¿Cuándo me toca inscribir ramos si soy de la jornada Diurna?"</i></p>
+        </div>
+        """, unsafe_allow_html=True)
     with colB:
-        st.info("📋 **Problemas y Requisitos**\n\nEjemplo: *'¿Qué pasa si tengo un tope de horario o qué requisitos necesito?'*")
+        st.markdown("""
+        <div class="welcome-card">
+            <h4>📋 Problemas y Requisitos</h4>
+            <p>Ejemplo: <i>"¿Qué pasa si tengo un tope de horario o bloqueo por deuda?"</i></p>
+        </div>
+        """, unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
 
 # --- 8. VISUALIZACIÓN DEL CHAT Y GENERACIÓN DE RESPUESTA ---
@@ -228,7 +260,6 @@ if prompt := st.chat_input("Escribe tu duda aquí..."):
                     rol = "Estudiante" if msg["role"] == "user" else "Psicobot"
                     historial_contexto += f"{rol}: {msg['content']}\n"
                 
-                # Obtención de la fecha actual
                 hoy = datetime.date.today()
                 fecha_actual_sistema = hoy.strftime("%A, %d de %B de %Y")
                 
