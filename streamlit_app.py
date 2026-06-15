@@ -125,7 +125,7 @@ def obtener_modelo_flash_activo():
                 return m.name
     except:
         pass
-    return 'models/gemini-2.5-flash'
+    return 'models/gemini-2.5-flash-lite'
 
 nombre_modelo_oficial = obtener_modelo_flash_activo()
 
