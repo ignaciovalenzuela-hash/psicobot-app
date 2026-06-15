@@ -113,7 +113,7 @@ if "messages" not in st.session_state:
 # --- 4. CONFIGURACIÓN DEL MODELO ---
 # NOTA: Si notas que la versión 'flash-lite' comete errores de lógica, cambia la línea de abajo por:
 # nombre_modelo_oficial = 'models/gemini-2.5-flash'
-nombre_modelo_oficial = 'models/gemini-2.5-flash-lite'
+nombre_modelo_oficial = 'models/gemini-2.5-flash'
 
 # --- 5. CARGA AUTOMÁTICA DE DOCUMENTOS (CON SEPARADORES ESTRICTOS) ---
 @st.cache_resource(show_spinner=False)
