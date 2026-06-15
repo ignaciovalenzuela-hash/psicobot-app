@@ -9,15 +9,12 @@ import datetime  # Mantiene la noción del tiempo real
 # --- 1. CONFIGURACIÓN DE PÁGINA Y ESTILOS VISUALES PERSONALIZADOS (CSS) ---
 st.set_page_config(page_title="Psicobot", page_icon="🧠", layout="centered")
 
-# Inyección de la nueva paleta de colores: #ff89c9 y #cc609b
 st.markdown("""
 <style>
-    /* Ocultar elementos nativos de Streamlit */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
 
-    /* Gradiente personalizado para el título con los nuevos colores */
     .titulo-psicobot {
         background: linear-gradient(45deg, #cc609b, #ff89c9);
         -webkit-background-clip: text;
@@ -28,7 +25,6 @@ st.markdown("""
         margin-bottom: 0rem;
     }
 
-    /* Indicador dinámico "Bot en Línea" adaptado a la nueva paleta */
     .online-indicator {
         display: flex;
         justify-content: center;
@@ -54,7 +50,6 @@ st.markdown("""
         100% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 137, 201, 0); }
     }
 
-    /* Tarjetas de bienvenida personalizadas (Complementarias al fondo blanco) */
     .welcome-card {
         background-color: #ffffff;
         border-left: 5px solid #cc609b;
@@ -115,11 +110,12 @@ else:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# --- 4. CONFIGURACIÓN DEL MODELO (ESTRICTO GEMINI-2.5-FLASH-LITE ESTABLE) ---
-# Forzamos directamente el uso de la versión estable de producción para evitar errores 404 por modelos de prueba obsoletos.
+# --- 4. CONFIGURACIÓN DEL MODELO ---
+# NOTA: Si notas que la versión 'flash-lite' comete errores de lógica, cambia la línea de abajo por:
+# nombre_modelo_oficial = 'models/gemini-2.5-flash'
 nombre_modelo_oficial = 'models/gemini-2.5-flash-lite'
 
-# --- 5. CARGA AUTOMÁTICA DE DOCUMENTOS ---
+# --- 5. CARGA AUTOMÁTICA DE DOCUMENTOS (CON SEPARADORES ESTRICTOS) ---
 @st.cache_resource(show_spinner=False)
 def cargar_documentos():
     texto_total = ""
@@ -139,7 +135,9 @@ def cargar_documentos():
             
             if df is not None:
                 archivos_procesados.append(f"📊 {a}")
-                texto_total += f"\n--- REPOSITORIO HORARIOS HORAS: {a} ---\n"
+                texto_total += f"\n=========================================\n"
+                texto_total += f"🚀 REPOSITORIO DE HORARIOS DESDE ARCHIVO EXCEL: {a}\n"
+                texto_total += f"=========================================\n"
                 df.columns = [normalizar_columna(c) for c in df.columns]
                 
                 for _, fila in df.iterrows():
@@ -153,13 +151,18 @@ def cargar_documentos():
                     h_fin = limpiar_celda_texto(fila.get('HORA FINALIZACION DE LA CLASE', fila.get('HORA_FIN', '')))
                     
                     texto_total += f"Materia: {asig} | Seccion: {secc} | Semestre: {sem} | Dia: {dia} | Fecha: {f_limpia} | Horario: {h_ini} a {h_fin}\n"
-                texto_total += "--- FIN REPOSITORIO ---\n"
+                texto_total += f"--- FIN DEL ARCHIVO EXCEL: {a} ---\n\n"
                 
         elif a.endswith('.pdf'):
             try:
+                texto_pdf = f"\n=========================================\n"
+                texto_pdf += f"📄 DOCUMENTO NORMATIVO/INFORMATIVO: {a}\n"
+                texto_pdf += f"=========================================\n"
                 with fitz.open(a) as doc:
                     for pagina in doc:
-                        texto_total += pagina.get_text()
+                        texto_pdf += pagina.get_text()
+                texto_pdf += f"\n--- FIN DEL DOCUMENTO PDF: {a} ---\n\n"
+                texto_total += texto_pdf
                 archivos_procesados.append(f"📄 {a}")
             except: continue
             
@@ -167,11 +170,16 @@ def cargar_documentos():
 
 contexto_facultad, archivos_activos = cargar_documentos()
 
-# --- 6. INSTRUCCIONES DE SISTEMA ---
+# --- 6. INSTRUCCIONES DE SISTEMA (MÁXIMA PRECISIÓN) ---
 instrucciones_base = (
-    "Eres Psicobot, el asistente oficial integral de la Escuela de Psicología.\n"
-    "Tu objetivo es dar respuestas PRECISAS, DIRECTAS Y CONCISAS, usando emojis y negritas, sin saludos ni despedidas largas.\n\n"
+    "Eres Psicobot, el asistente oficial estricto e integral de la Escuela de Psicología.\n"
+    "Tu objetivo es dar respuestas 100% PRECISAS, DIRECTAS Y CONCISAS basados ÚNICAMENTE en el repositorio proporcionado.\n\n"
     
+    "🛑 REGLA DE ORO DE PRECISIÓN ABSOLUTA:\n"
+    "- Responde SOLO con la información explícita que está dentro de las etiquetas de los archivos en el 'REPOSITORIO DE DATOS'.\n"
+    "- Si un dato, fecha, horario o regla NO está en los documentos, bajo ninguna circunstancia lo inventes o asumas. Di textualmente: 'No dispongo de esa información detallada en mis registros oficiales actuales'.\n"
+    "- Queda totalmente prohibido alucinar normativas de otras universidades.\n\n"
+
     "⚠️ REGLA CRÍTICA DE ANCLAJE TEMPORAL:\n"
     "- Se te proporcionará una 'FECHA ACTUAL DEL SISTEMA' en cada mensaje.\n"
     "- Ignora calendarios o procesos de inscripción cuyas fechas sean anteriores a la fecha actual.\n"
@@ -193,13 +201,13 @@ instrucciones_base = (
     "- Responde de inmediato usando el FORMATO VISUAL ESTRICTO.\n\n"
 
     "ESCENARIO C: CONSULTA DE TOMA DE RAMOS / INSCRIPCIÓN DE ASIGNATURAS\n"
-    "- Usa las fechas oficiales del documento 2026-2 (Diurno: 29 Jul, Vespertino: 7 Ago, Semipresencial: 12 Ago).\n\n"
+    "- Revisa las fechas oficiales del documento PDF correspondiente a inscripciones 2026-2 adjunto en el repositorio.\n\n"
 
     "ESCENARIO D: MANUAL DE RESPUESTAS ADMINISTRATIVAS:\n"
     "- **Requisitos Obligatorios:** Situación académica vigente, contrato firmado, prerrequisitos al día y NO tener deuda financiera. Si hay bloqueo financiero se resuelve en Finanzas y se habilita para el periodo de rezagados.\n"
     "- **Topes de Horario / Sin Cupo:** Buscar otra sección en el Catálogo. Si el tope es inevitable o no hay cupos, ingresar requerimiento en el 'Portal de Solicitudes'.\n"
     "- **Cantidad de Ramos:** Máximo 6 asignaturas por semestre.\n"
-    "- **Electivos de Formación General:** No tienen prerrequisitos. Son transversales (no se puede solicitar estar en la misma sección que un compañero específico). Si no hay cupo, tomar otro o revisar en rezagados.\n"
+    "- **Electivos de Formación General:** No tienen prerrequisitos. Son transversales. Si no hay cupo, tomar otro o revisar en rezagados.\n"
     "- **Alumnos Nuevos:** Su primer semestre viene inscrito automáticamente.\n"
     "- **Baja de Ramos:** A través del 'Portal de Solicitudes' dentro del plazo límite del Calendario Académico.\n"
     "- **Ubicación:** Proceso 100% online en el 'Portal del Alumno'.\n\n"
@@ -208,7 +216,7 @@ instrucciones_base = (
     "Estructura la lista dejando obligatoriamente una línea en blanco (doble salto de línea) entre el final de una asignatura y el inicio de la siguiente. Jamás coloques el nombre de una nueva asignatura en la misma línea donde termina el horario de la materia anterior."
 )
 
-# --- 7. PANTALLA DE BIENVENIDA CON DISEÑO EXCLUSIVO ---
+# --- 7. PANTALLA DE BIENVENIDA ---
 if not st.session_state.messages:
     st.markdown("<h3 style='text-align: center; color: #cc609b;'>¡Hola! Estoy aquí para ayudarte 🤖</h3>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: #555;'>Puedes preguntarme sobre tus horarios o procesos de la carrera.</p>", unsafe_allow_html=True)
