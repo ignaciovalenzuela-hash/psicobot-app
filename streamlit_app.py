@@ -9,7 +9,7 @@ import datetime  # Mantiene la noción del tiempo real
 # --- 1. CONFIGURACIÓN DE PÁGINA Y ESTILOS VISUALES PERSONALIZADOS (CSS) ---
 st.set_page_config(page_title="Psicobot", page_icon="🧠", layout="centered")
 
-# Inyección de la nueva paleta de colores: #ff89c9 y #cc609b
+# Inyección de la paleta de colores: #ff89c9 y #cc609b
 st.markdown("""
 <style>
     /* Ocultar elementos nativos de Streamlit */
@@ -17,7 +17,7 @@ st.markdown("""
     footer {visibility: hidden;}
     header {visibility: hidden;}
 
-    /* Gradiente personalizado para el título con los nuevos colores */
+    /* Gradiente personalizado para el título */
     .titulo-psicobot {
         background: linear-gradient(45deg, #cc609b, #ff89c9);
         -webkit-background-clip: text;
@@ -28,7 +28,7 @@ st.markdown("""
         margin-bottom: 0rem;
     }
 
-    /* Indicador dinámico "Bot en Línea" adaptado a la nueva paleta */
+    /* Indicador dinámico "Bot en Línea" */
     .online-indicator {
         display: flex;
         justify-content: center;
@@ -54,7 +54,7 @@ st.markdown("""
         100% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 137, 201, 0); }
     }
 
-    /* Tarjetas de bienvenida personalizadas (Complementarias al fondo blanco) */
+    /* Tarjetas de bienvenida personalizadas */
     .welcome-card {
         background-color: #ffffff;
         border-left: 5px solid #cc609b;
@@ -87,12 +87,6 @@ def normalizar_columna(col):
     col = str(col).strip().upper()
     return ''.join(ch for ch in unicodedata.normalize('NFD', col) if unicodedata.category(ch) != 'Mn')
 
-def limpiar_celda_texto(val):
-    if pd.isna(val): return ""
-    texto = str(val).strip()
-    if texto.endswith('.0'): texto = texto[:-2]
-    return texto
-
 # --- 2. LOGO Y ENCABEZADO ---
 col1, col2, col3 = st.columns([1, 1.2, 1])
 with col2:
@@ -115,21 +109,10 @@ else:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# --- 4. CONFIGURACIÓN DEL MODELO ---
-@st.cache_resource(show_spinner=False)
-def obtener_modelo_flash_activo():
-    try:
-        modelos_disponibles = list(genai.list_models())
-        for m in modelos_disponibles:
-            if 'generateContent' in m.supported_generation_methods and 'flash' in m.name.lower():
-                return m.name
-    except:
-        pass
-    return 'models/gemini-2.5-flash'
+# --- 4. CONFIGURACIÓN DEL MODELO (ESTÁNDAR DE ALTA COMPRENSIÓN) ---
+nombre_modelo_oficial = 'models/gemini-2.5-flash'
 
-nombre_modelo_oficial = obtener_modelo_flash_activo()
-
-# --- 5. CARGA AUTOMÁTICA DE DOCUMENTOS ---
+# --- 5. CARGA AUTOMÁTICA DE DOCUMENTOS (CONVERSIÓN ESTRUCTURADA A MARKDOWN) ---
 @st.cache_resource(show_spinner=False)
 def cargar_documentos():
     texto_total = ""
@@ -149,27 +132,26 @@ def cargar_documentos():
             
             if df is not None:
                 archivos_procesados.append(f"📊 {a}")
-                texto_total += f"\n--- REPOSITORIO HORARIOS HORAS: {a} ---\n"
+                texto_total += f"\n\n=========================================\n"
+                texto_total += f"📊 TABLA DE DATOS Y HORARIOS DESDE: {a}\n"
+                texto_total += f"=========================================\n"
+                
+                # Normalizamos las columnas
                 df.columns = [normalizar_columna(c) for c in df.columns]
                 
-                for _, fila in df.iterrows():
-                    asig = limpiar_celda_texto(fila.get('ASIGNATURAS', fila.get('ASIGNATURA', '')))
-                    secc = limpiar_celda_texto(fila.get('SECCION', fila.get('SECCIÓN', '')))
-                    sem = limpiar_celda_texto(fila.get('SEMESTRE', ''))
-                    dia = limpiar_celda_texto(fila.get('DIA', fila.get('DÍA', '')))
-                    f_raw = limpiar_celda_texto(fila.get('FECHA DE LA CLASE', fila.get('FECHA', '')))
-                    f_limpia = f_raw.split(' ')[0] if ' ' in f_raw else f_raw
-                    h_ini = limpiar_celda_texto(fila.get('HORA INICIO DE LA CLASE', fila.get('HORA_INICIO', '')))
-                    h_fin = limpiar_celda_texto(fila.get('HORA FINALIZACION DE LA CLASE', fila.get('HORA_FIN', '')))
-                    
-                    texto_total += f"Materia: {asig} | Seccion: {secc} | Semestre: {sem} | Dia: {dia} | Fecha: {f_limpia} | Horario: {h_ini} a {h_fin}\n"
-                texto_total += "--- FIN REPOSITORIO ---\n"
+                # Convertimos todo el dataframe directamente a una tabla Markdown limpia
+                texto_total += df.to_markdown(index=False)
+                texto_total += f"\n--- FIN DE LA TABLA {a} ---\n\n"
                 
         elif a.endswith('.pdf'):
             try:
+                texto_total += f"\n\n=========================================\n"
+                texto_total += f"📄 DOCUMENTO REGLAMENTO/CALENDARIO: {a}\n"
+                texto_total += f"=========================================\n"
                 with fitz.open(a) as doc:
                     for pagina in doc:
                         texto_total += pagina.get_text()
+                texto_total += f"\n--- FIN DEL DOCUMENTO {a} ---\n\n"
                 archivos_procesados.append(f"📄 {a}")
             except: continue
             
@@ -177,48 +159,46 @@ def cargar_documentos():
 
 contexto_facultad, archivos_activos = cargar_documentos()
 
-# --- 6. INSTRUCCIONES DE SISTEMA ---
+# --- 6. INSTRUCCIONES DE SISTEMA (MÁXIMO ORDEN VISUAL Y PRECISIÓN) ---
 instrucciones_base = (
-    "Eres Psicobot, el asistente oficial integral de la Escuela de Psicología.\n"
-    "Tu objetivo es dar respuestas PRECISAS, DIRECTAS Y CONCISAS, usando emojis y negritas, sin saludos ni despedidas largas.\n\n"
+    "Eres Psicobot, el asistente oficial de la Escuela de Psicología. Tu prioridad número uno es el ORDEN VISUAL y la PRECISIÓN ABSOLUTA.\n\n"
     
-    "⚠️ REGLA CRÍTICA DE ANCLAJE TEMPORAL:\n"
-    "- Se te proporcionará una 'FECHA ACTUAL DEL SISTEMA' en cada mensaje.\n"
-    "- Ignora calendarios o procesos de inscripción cuyas fechas sean anteriores a la fecha actual.\n"
-    "- Si preguntan por 'toma de ramos' o 'calendario', asume SIEMPRE el proceso 2026-2.\n\n"
+    "🛠️ REGLAS OBLIGATORIAS DE FORMATO VISUAL:\n"
+    "- Está estrictamente PROHIBIDO responder con párrafos largos o texto apelotonado.\n"
+    "- Usa obligatoriamente títulos claros (`###`), listas con viñetas (`*`) y negritas (`**`) para resaltar datos críticos.\n"
+    "- Cada vez que entregues horarios de clases o fechas de un proceso, hazlo usando listas limpias separadas por saltos de línea dobles.\n"
+    "- Ejemplo de estructura obligatoria de respuesta para Horarios:\n"
+    "  ### 📅 Horario Encontrado\n"
+    "  * 📖 **Asignatura:** [Nombre]\n"
+    "    * 👥 **Sección:** [Número] | 🏫 **Semestre:** [Número]\n"
+    "    * 📆 **Día:** [Nombre del Día]\n"
+    "    * ⏰ **Bloque:** [Hora] a [Hora]\n\n"
 
-    "🧠 REGLA DE CRITERIO DE ADAPTABILIDAD (GENERAL VS. ESPECÍFICO):\n"
-    "- RESPUESTA QUIRÚRGICA: Si el alumno pide un dato muy puntual (ej: '¿Cuándo le toca a Diurno?'), dale DIRECTAMENTE ese dato exacto con su horario. No mezcles otras jornadas.\n"
-    "- RESPUESTA GLOBAL: Si el alumno expresa confusión o pide información amplia (ej: '¿Cuáles son las fechas de toma de ramos?', '¿Cómo es el proceso?'), NO te limites a una jornada. Muestra una línea de tiempo resumida con hitos de Diurno, Vespertino y Semipresencial consecutivamente.\n\n"
+    "🛑 REGLA DE ORO DE PRECISIÓN ACTUALIZADA:\n"
+    "- Trabaja únicamente con los datos contenidos dentro de la tabla Markdown o texto del repositorio.\n"
+    "- Si el alumno no especifica sección o semestre cuando solicita un horario, detén tu ejecución y pídele amablemente esos campos para poder filtrar la tabla de datos.\n"
+    "- Si un dato no existe explícitamente en el repositorio, di de manera ordenada: '❌ No dispongo de ese registro específico en el sistema actual.'\n\n"
+
+    "⚠️ REGLA CRÍTICA DE ANCLAJE TEMPORAL:\n"
+    "- Se te proporcionará una 'FECHA ACTUAL DEL SISTEMA'.\n"
+    "- Ignora calendarios antiguos. Si te consultan por toma de ramos o hitos académicos generales, asume por defecto el periodo activo 2026-2.\n\n"
 
     "REGLA 0: FILTRO OBLIGATORIO DE MODALIDAD\n"
-    "- Si la pregunta es específica pero el alumno NO menciona a qué modalidad pertenece, detén la respuesta y pregunta brevemente: 'Para entregarte la información correcta, ¿a qué modalidad perteneces? (Presencial Diurno, Presencial Vespertino o Semipresencial)'.\n"
-    "- Si la pregunta es abierta o global (ej: 'Dame todo el calendario'), no restrinjas, aplica la RESPUESTA GLOBAL.\n\n"
+    "- Ante consultas específicas de procesos, si el alumno no indica su modalidad, pregúntale de inmediato de forma estética utilizando una lista limpia:\n"
+    "  'Para ayudarte con precisión, ¿a qué modalidad perteneces?\n"
+    "  * Presencial Diurno\n"
+    "  * Presencial Vespertino\n"
+    "  * Semipresencial'\n\n"
 
-    "REGLA 1: CLASIFICACIÓN DE LA CONSULTA Y MANUAL DE PROCEDIMIENTOS (FAQ):\n"
-    "ESCENARIO A: CONSULTA GENERAL DE HORARIOS DE CLASE\n"
-    "- Requieres OBLIGATORIAMENTE el SEMESTRE y SECCIÓN. Muestra las materias con el FORMATO VISUAL ESTRICTO.\n\n"
-
-    "ESCENARIO B: CONSULTA DE UNA ASIGNATURA Y SECCIÓN ESPECÍFICA\n"
-    "- Responde de inmediato usando el FORMATO VISUAL ESTRICTO.\n\n"
-
-    "ESCENARIO C: CONSULTA DE TOMA DE RAMOS / INSCRIPCIÓN DE ASIGNATURAS\n"
-    "- Usa las fechas oficiales del documento 2026-2 (Diurno: 29 Jul, Vespertino: 7 Ago, Semipresencial: 12 Ago).\n\n"
-
-    "ESCENARIO D: MANUAL DE RESPUESTAS ADMINISTRATIVAS:\n"
-    "- **Requisitos Obligatorios:** Situación académica vigente, contrato firmado, prerrequisitos al día y NO tener deuda financiera. Si hay bloqueo financiero se resuelve en Finanzas y se habilita para el periodo de rezagados.\n"
-    "- **Topes de Horario / Sin Cupo:** Buscar otra sección en el Catálogo. Si el tope es inevitable o no hay cupos, ingresar requerimiento en el 'Portal de Solicitudes'.\n"
-    "- **Cantidad de Ramos:** Máximo 6 asignaturas por semestre.\n"
-    "- **Electivos de Formación General:** No tienen prerrequisitos. Son transversales (no se puede solicitar estar en la misma sección que un compañero específico). Si no hay cupo, tomar otro o revisar en rezagados.\n"
-    "- **Alumnos Nuevos:** Su primer semestre viene inscrito automáticamente.\n"
-    "- **Baja de Ramos:** A través del 'Portal de Solicitudes' dentro del plazo límite del Calendario Académico.\n"
-    "- **Ubicación:** Proceso 100% online en el 'Portal del Alumno'.\n\n"
-
-    "REGLA 2: FORMATO VISUAL PARA HORARIOS (SOLO ESCENARIOS A Y B - ESTRICTO)\n"
-    "Estructura la lista dejando obligatoriamente una línea en blanco (doble salto de línea) entre el final de una asignatura y el inicio de la siguiente. Jamás coloques el nombre de una nueva asignatura en la misma línea donde termina el horario de la materia anterior."
+    "REGLA 1: MANUAL DE RESPUESTAS ADMINISTRATIVAS:\n"
+    "- **Requisitos:** Situación académica al día, contrato firmado, prerrequisitos aprobados y sin deudas (bloqueos financieros se tratan en Finanzas).\n"
+    "- **Topes de Horario:** Buscar otra sección en el catálogo. Si persiste, abrir caso en el 'Portal de Solicitudes'.\n"
+    "- **Carga Máxima:** 6 ramos por semestre.\n"
+    "- **Alumnos Nuevos:** Matrícula e inscripción del primer semestre automáticas.\n"
+    "- **Ubicación:** Todo trámite se realiza vía 'Portal del Alumno'."
 )
 
-# --- 7. PANTALLA DE BIENVENIDA CON DISEÑO EXCLUSIVO ---
+# --- 7. PANTALLA DE BIENVENIDA ---
 if not st.session_state.messages:
     st.markdown("<h3 style='text-align: center; color: #cc609b;'>¡Hola! Estoy aquí para ayudarte 🤖</h3>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: #555;'>Puedes preguntarme sobre tus horarios o procesos de la carrera.</p>", unsafe_allow_html=True)
@@ -253,7 +233,7 @@ if prompt := st.chat_input("Escribe tu duda aquí..."):
         st.markdown(prompt)
 
     with st.chat_message("assistant", avatar="🧠"):
-        with st.spinner("Preparando respuesta..."):
+        with st.spinner("Buscando y ordenando información..."):
             try:
                 historial_contexto = ""
                 for msg in st.session_state.messages[:-1]:
@@ -268,7 +248,7 @@ if prompt := st.chat_input("Escribe tu duda aquí..."):
                 full_prompt = (
                     f"{instrucciones_base}\n\n"
                     f"⏰ FECHA ACTUAL DEL SISTEMA (HOY ES): {fecha_actual_sistema}\n\n"
-                    f"REPOSITORIO DE DATOS DE LA CARRERA:\n{contexto_facultad}\n\n"
+                    f"REPOSITORIO DE DATOS DE LA CARRERA (TABLAS Y DOCUMENTOS):\n{contexto_facultad}\n\n"
                     f"HISTORIAL DE LA CONVERSACIÓN:\n{historial_contexto}\n"
                     f"ESTUDIANTE: {prompt}"
                 )
