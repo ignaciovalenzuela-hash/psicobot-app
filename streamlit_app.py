@@ -1,6 +1,6 @@
 import streamlit as st
 import google.generativeai as genai
-import fitz  # Para los PDFs
+import fitz  # Para los PDFs (PyMuPDF)
 import pandas as pd  # Para el Excel
 import os
 import unicodedata
@@ -9,15 +9,12 @@ import datetime  # Mantiene la noción del tiempo real
 # --- 1. CONFIGURACIÓN DE PÁGINA Y ESTILOS VISUALES PERSONALIZADOS (CSS) ---
 st.set_page_config(page_title="Psicobot", page_icon="🧠", layout="centered")
 
-# Inyección de la paleta de colores: #ff89c9 y #cc609b
 st.markdown("""
 <style>
-    /* Ocultar elementos nativos de Streamlit */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
 
-    /* Gradiente personalizado para el título */
     .titulo-psicobot {
         background: linear-gradient(45deg, #cc609b, #ff89c9);
         -webkit-background-clip: text;
@@ -28,7 +25,6 @@ st.markdown("""
         margin-bottom: 0rem;
     }
 
-    /* Indicador dinámico "Bot en Línea" */
     .online-indicator {
         display: flex;
         justify-content: center;
@@ -54,7 +50,6 @@ st.markdown("""
         100% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 137, 201, 0); }
     }
 
-    /* Tarjetas de bienvenida personalizadas */
     .welcome-card {
         background-color: #ffffff;
         border-left: 5px solid #cc609b;
@@ -83,9 +78,21 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# --- FUNCIONES DE LIMPIEZA Y FORMATO ---
 def normalizar_columna(col):
     col = str(col).strip().upper()
     return ''.join(ch for ch in unicodedata.normalize('NFD', col) if unicodedata.category(ch) != 'Mn')
+
+# NUEVA FUNCIÓN: Crea la tabla Markdown manualmente para evitar el error de 'tabulate'
+def convertir_df_a_markdown(df):
+    columnas = df.columns.tolist()
+    md = "|" + "|".join(columnas) + "|\n"
+    md += "|" + "|".join(["---"] * len(columnas)) + "|\n"
+    for _, fila in df.iterrows():
+        # Limpiamos los NaN y convertimos a string
+        valores = [str(val).strip() if pd.notna(val) else "" for val in fila.values]
+        md += "|" + "|".join(valores) + "|\n"
+    return md
 
 # --- 2. LOGO Y ENCABEZADO ---
 col1, col2, col3 = st.columns([1, 1.2, 1])
@@ -109,10 +116,10 @@ else:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# --- 4. CONFIGURACIÓN DEL MODELO (ESTÁNDAR DE ALTA COMPRENSIÓN) ---
+# --- 4. CONFIGURACIÓN DEL MODELO ---
 nombre_modelo_oficial = 'models/gemini-2.5-flash'
 
-# --- 5. CARGA AUTOMÁTICA DE DOCUMENTOS (CONVERSIÓN ESTRUCTURADA A MARKDOWN) ---
+# --- 5. CARGA AUTOMÁTICA DE DOCUMENTOS ---
 @st.cache_resource(show_spinner=False)
 def cargar_documentos():
     texto_total = ""
@@ -139,8 +146,8 @@ def cargar_documentos():
                 # Normalizamos las columnas
                 df.columns = [normalizar_columna(c) for c in df.columns]
                 
-                # Convertimos todo el dataframe directamente a una tabla Markdown limpia
-                texto_total += df.to_markdown(index=False)
+                # Usamos nuestra función personalizada a prueba de fallos
+                texto_total += convertir_df_a_markdown(df)
                 texto_total += f"\n--- FIN DE LA TABLA {a} ---\n\n"
                 
         elif a.endswith('.pdf'):
@@ -159,7 +166,7 @@ def cargar_documentos():
 
 contexto_facultad, archivos_activos = cargar_documentos()
 
-# --- 6. INSTRUCCIONES DE SISTEMA (MÁXIMO ORDEN VISUAL Y PRECISIÓN) ---
+# --- 6. INSTRUCCIONES DE SISTEMA ---
 instrucciones_base = (
     "Eres Psicobot, el asistente oficial de la Escuela de Psicología. Tu prioridad número uno es el ORDEN VISUAL y la PRECISIÓN ABSOLUTA.\n\n"
     
