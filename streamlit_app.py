@@ -115,19 +115,21 @@ else:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# --- 4. CONFIGURACIÓN DEL MODELO ---
+# --- 4. CONFIGURACIÓN DEL MODELO (ESTRICTO GEMINI-2.5-FLASH-LITE) ---
 @st.cache_resource(show_spinner=False)
-def obtener_modelo_flash_activo():
+def obtener_modelo_flash_lite_activo():
     try:
         modelos_disponibles = list(genai.list_models())
         for m in modelos_disponibles:
-            if 'generateContent' in m.supported_generation_methods and 'flash' in m.name.lower():
+            # Forzamos la búsqueda específica de la versión 'flash-lite'
+            if 'generateContent' in m.supported_generation_methods and 'flash-lite' in m.name.lower():
                 return m.name
     except:
         pass
+    # Respaldo seguro si falla el listado
     return 'models/gemini-2.5-flash-lite'
 
-nombre_modelo_oficial = obtener_modelo_flash_activo()
+nombre_modelo_oficial = obtener_modelo_flash_lite_activo()
 
 # --- 5. CARGA AUTOMÁTICA DE DOCUMENTOS ---
 @st.cache_resource(show_spinner=False)
