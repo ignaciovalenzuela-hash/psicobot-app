@@ -148,7 +148,7 @@ def cargar_documentos():
         elif a.endswith('.pdf'):
             try:
                 texto_total += f"\n\n=========================================\n"
-                texto_total += f"📄 DOCUMENTO REGLAMENTO/CALENDARIO: {a}\n"
+                texto_total += f"📄 DOCUMENTO REPOSITORIO: {a}\n"
                 texto_total += f"=========================================\n"
                 with fitz.open(a) as doc:
                     for pagina in doc:
@@ -161,64 +161,60 @@ def cargar_documentos():
 
 contexto_facultad, archivos_activos = cargar_documentos()
 
-# --- 6. INSTRUCCIONES DE SISTEMA (ACTUALIZADAS CON EL NUEVO FORMATO DE LISTA) ---
+# --- 6. INSTRUCCIONES DE SISTEMA ULTRA-OPTIMIZADAS ---
 instrucciones_base = (
-    "Eres Psicobot, el asistente oficial de la Escuela de Psicología. Tu prioridad número uno es el ORDEN VISUAL, la CLARIDAD y la PRECISIÓN ABSOLUTA.\n\n"
+    "Eres Psicobot, asistente IA de la Escuela de Psicología. Tu objetivo es ser EMPÁTICO, CLARO, DIRECTO y ULTRA-CONCISO para ahorrar tokens. Prohibido dar rodeos o respuestas largas.\n\n"
     
-    "🛠️ REGLAS OBLIGATORIAS DE FORMATO VISUAL PARA HORARIOS:\n"
-    "- Está estrictamente PROHIBIDO responder con párrafos largos, textos apelotonados o repetir el nombre de la asignatura en cada línea.\n"
-    "- Cuando un alumno te consulte por sus fechas de clases, debes agrupar obligatoriamente la información por Asignatura.\n"
-    "- Debes estructurar la respuesta usando el siguiente formato exacto con viñetas y negritas:\n\n"
-    "  ### 📖 [Nombre de la Asignatura en Mayúsculas]\n"
-    "  * **Sección:** [Número] | **Semestre:** [Número]\n"
-    "  * 📆 [Fecha 1 (o Día)] - ⏰ [Hora de Inicio] a [Hora de Fin]\n"
-    "  * 📆 [Fecha 2 (o Día)] - ⏰ [Hora de Inicio] a [Hora de Fin]\n"
-    "  * 📆 [Fecha 3 (o Día)] - ⏰ [Hora de Inicio] a [Hora de Fin]\n\n"
-    "- Si hay más de una asignatura que mostrar, deja un doble salto de línea antes de comenzar con la siguiente asignatura (`### 📖 ...`).\n\n"
+    "👥 MODALIDADES Y CONTEXTO:\n"
+    "- Existen 3 modalidades: 'Semipresencial', 'Diurno presencial' y 'Vespertino presencial'.\n"
+    "- REGLA DE FILTRO: Si la consulta depende de la modalidad y el alumno no la menciona, frena y pregúntale cuál es su modalidad antes de dar información genérica.\n"
+    "- Diurno presencial: Sus asignaturas duran exactamente 15 clases (sin contar exámenes).\n"
+    "- Semipresencial y Vespertino presencial: Funcionan con sistema de asignaturas de ciclo y semestral.\n\n"
 
-    "🛑 REGLA DE ORO DE PRECISIÓN:\n"
-    "- Trabaja únicamente con los datos contenidos dentro de la tabla Markdown o texto del repositorio.\n"
-    "- Si el alumno no especifica sección o semestre cuando solicita un horario de clases, detén tu ejecución y pídele amablemente esos campos de forma ordenada para poder filtrar la tabla correctamente.\n"
-    "- Si un dato no existe explícitamente en el repositorio, responde de manera limpia: '❌ No dispongo de ese registro específico en el sistema actual.'\n\n"
+    "📝 SOLICITUDES Y TRÁMITES:\n"
+    "Ante cualquier consulta sobre solicitudes, entrega estrictamente este texto y ruta:\n"
+    "'Debes ingresar al [Portal de Solicitudes] con tus credenciales habituales. La ruta es:\n"
+    "* Requerimiento académico > Subcategoría (la que más se acomode a tu solicitud).\n"
+    "* Las respuestas demoran generalmente 48 horas, con un máximo legal de hasta 15 días hábiles.'\n\n"
 
-    "⚠️ REGLA CRÍTICA DE ANCLAJE TEMPORAL:\n"
-    "- Se te proporcionará una 'FECHA ACTUAL DEL SISTEMA'.\n"
-    "- Ignora calendarios antiguos. Si te consultan por toma de ramos o hitos académicos generales, asume por defecto el periodo activo 2026-2.\n\n"
+    "🔑 ACCESO A PORTALES Y NOTAS:\n"
+    "- Contraseñas: Estudiantes nuevos ingresan con su RUT. Quienes ya la cambiaron, entran con su contraseña personalizada.\n"
+    "- Notas Semipresencial: Deben revisar sus notas en el portal **eCampus**. En el *Portal Alumno* solo verán el promedio final de las asignaturas ya aprobadas.\n"
+    "- Notas Diurno/Vespertino: Revisan directamente en su Portal Alumno.\n\n"
 
-    "REGLA 0: FILTRO OBLIGATORIO DE MODALIDAD\n"
-    "- Ante consultas de procesos generales, si el alumno no indica su modalidad, pregúntale de inmediato utilizando una lista limpia:\n"
-    "  'Para ayudarte con precisión, ¿a qué modalidad perteneces?\n"
-    "  * Presencial Diurno\n"
-    "  * Presencial Vespertino\n"
-    "  * Semipresencial'\n\n"
+    "🏢 ORGANIGRAMA Y AUTORIDADES:\n"
+    "- Utiliza estrictamente la información de los documentos cargados para responder sobre autoridades de la facultad.\n\n"
 
-    "REGLA 1: MANUAL DE RESPUESTAS ADMINISTRATIVAS:\n"
-    "- **Requisitos:** Situación académica al día, contrato firmado, prerrequisitos aprobados y sin deudas.\n"
-    "- **Topes de Horario:** Buscar otra sección en el catálogo. Si persiste, abrir caso en el 'Portal de Solicitudes'.\n"
-    "- **Carga Máxima:** 6 ramos por semestre.\n"
-    "- **Alumnos Nuevos:** Matrícula e inscripción automáticas en el primer semestre.\n"
-    "- **Ubicación:** Todo trámite se realiza vía 'Portal del Alumno'."
+    "🛠️ FORMATO PARA HORARIOS:\n"
+    "Agrupa las fechas por asignatura usando este formato simple (sin repetir el nombre):\n"
+    "### 📖 [NOMBRE ASIGNATURA]\n"
+    "* Sección: [X] | Semestre: [X]\n"
+    "* 📆 [Fecha/Día 1] — ⏰ [Hora Inicio a Fin]\n"
+    "* 📆 [Fecha/Día 2] — ⏰ [Hora Inicio a Fin]\n\n"
+
+    "📌 REGLA DE ORO:\n"
+    "Si no encuentras el dato en el repositorio, no inventes. Di: '❌ No dispongo de ese registro en el sistema en este momento.'"
 )
 
 # --- 7. PANTALLA DE BIENVENIDA ---
 if not st.session_state.messages:
     st.markdown("<h3 style='text-align: center; color: #cc609b;'>¡Hola! Estoy aquí para ayudarte 🤖</h3>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color: #555;'>Puedes preguntarme sobre tus horarios o procesos de la carrera.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #555;'>Consultas rápidas sobre horarios, notas, modalidades y solicitudes.</p>", unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
     
     colA, colB = st.columns(2)
     with colA:
         st.markdown("""
         <div class="welcome-card">
-            <h4>📅 Horarios e Inscripción</h4>
-            <p>Ejemplo: <i>"¿Cuándo me toca inscribir ramos si soy de la jornada Diurna?"</i></p>
+            <h4>📅 Horarios y Modalidad</h4>
+            <p>Ejemplo: <i>"¿Cuántas clases dura mi ramo en Diurno Presencial?"</i></p>
         </div>
         """, unsafe_allow_html=True)
     with colB:
         st.markdown("""
         <div class="welcome-card">
-            <h4>📋 Problemas y Requisitos</h4>
-            <p>Ejemplo: <i>"¿Qué pasa si tengo un tope de horario o bloqueo por deuda?"</i></p>
+            <h4>📋 Solicitudes y Notas</h4>
+            <p>Ejemplo: <i>"¿Dónde reviso mis notas si soy Semipresencial?"</i></p>
         </div>
         """, unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
@@ -235,10 +231,11 @@ if prompt := st.chat_input("Escribe tu duda aquí..."):
         st.markdown(prompt)
 
     with st.chat_message("assistant", avatar="🧠"):
-        with st.spinner("Buscando y ordenando información..."):
+        with st.spinner("Procesando consulta..."):
             try:
+                # Comprimir historial para ahorrar tokens (solo las últimas 4 interacciones)
                 historial_contexto = ""
-                for msg in st.session_state.messages[:-1]:
+                for msg in st.session_state.messages[-5:-1]:
                     rol = "Estudiante" if msg["role"] == "user" else "Psicobot"
                     historial_contexto += f"{rol}: {msg['content']}\n"
                 
@@ -249,9 +246,9 @@ if prompt := st.chat_input("Escribe tu duda aquí..."):
                 
                 full_prompt = (
                     f"{instrucciones_base}\n\n"
-                    f"⏰ FECHA ACTUAL DEL SISTEMA (HOY ES): {fecha_actual_sistema}\n\n"
-                    f"REPOSITORIO DE DATOS DE LA CARRERA (TABLAS Y DOCUMENTOS):\n{contexto_facultad}\n\n"
-                    f"HISTORIAL DE LA CONVERSACIÓN:\n{historial_contexto}\n"
+                    f"⏰ FECHA: {fecha_actual_sistema}\n\n"
+                    f"REPOSITORIO:\n{contexto_facultad}\n\n"
+                    f"HISTORIAL:\n{historial_contexto}\n"
                     f"ESTUDIANTE: {prompt}"
                 )
                 
@@ -261,7 +258,7 @@ if prompt := st.chat_input("Escribe tu duda aquí..."):
                     st.markdown(response.text)
                     st.session_state.messages.append({"role": "assistant", "content": response.text})
                 else:
-                    st.warning("⚠️ El asistente no devolvió una respuesta válida. Intenta reformular.")
+                    st.warning("⚠️ El asistente no devolvió una respuesta válida. Intenta de nuevo.")
                     
             except Exception as e:
-                st.error(f"⚠️ Error detallado del sistema: {e}")
+                st.error(f"⚠️ Error del sistema: {e}")
