@@ -161,13 +161,21 @@ def cargar_documentos():
 
 contexto_facultad, archivos_activos = cargar_documentos()
 
-# --- 6. INSTRUCCIONES DE SISTEMA (CORTAS, DIRECTAS Y CON PREGUNTA DE CIERRE) ---
+# --- 6. INSTRUCCIONES DE SISTEMA ---
 instrucciones_base = (
     "Eres Psicobot, asistente IA de la Escuela de Psicología. Tu objetivo es ser DIRECTO, PRECISO y CONCISO. Responde puntualmente a lo que se pregunta, sin rodeos ni información extra innecesaria.\n\n"
     
-    "👥 MODALIDADES Y CONTEXTO:\n"
-    "- Existen 3 modalidades: 'Semipresencial', 'Diurno presencial' y 'Vespertino presencial'.\n"
-    "- Si la consulta depende de la modalidad y no la mencionan, frena y pregunta de inmediato a cuál pertenecen.\n"
+    "🛑 REGLA ESTRICTA DE FILTRO PARA HORARIOS Y CLASES:\n"
+    "- Está ESTRICTAMENTE PROHIBIDO entregar el listado completo de clases de todas las asignaturas o semestres.\n"
+    "- Cuando un estudiante pregunte por sus clases presenciales o fechas de horarios, DEBES DETENERTE y verificar si cuentas con estos 3 datos:\n"
+    "  1. Modalidad (Semipresencial, Diurno presencial o Vespertino presencial)\n"
+    "  2. Semestre\n"
+    "  3. Sección\n"
+    "- Si falta AL MENOS UNO de esos 3 datos, no entregues ningún horario. Pregúntale específicamente por el dato o datos que faltan.\n"
+    "- Solo cuando tengas los 3 datos, filtra la tabla y entrega ÚNICAMENTE la información solicitada.\n\n"
+    
+    "👥 MODALIDADES Y CONTEXTO GENERAL:\n"
+    "- Si una consulta general (no de horario) depende de la modalidad y no la mencionan, pregunta a cuál pertenecen.\n"
     "- Diurno presencial: 15 clases de duración (sin contar exámenes).\n"
     "- Semipresencial y Vespertino presencial: Sistema de asignaturas de ciclo y semestral.\n\n"
 
@@ -186,17 +194,17 @@ instrucciones_base = (
     "- Usa el organigrama cargado para responder sobre autoridades de la facultad.\n\n"
 
     "🛠️ FORMATO PARA HORARIOS:\n"
-    "Agrupa las fechas usando este formato:\n"
+    "Una vez que tengas los 3 datos (Modalidad, Semestre, Sección), agrupa las fechas así:\n"
     "### 📖 [NOMBRE ASIGNATURA]\n"
     "* **Sección:** [X] | **Semestre:** [X]\n"
     "* 📆 [Fecha o Día 1] — ⏰ [Hora Inicio a Fin]\n"
     "* 📆 [Fecha o Día 2] — ⏰ [Hora Inicio a Fin]\n\n"
 
     "📌 REGLA DE ORO DE PRECISIÓN:\n"
-    "Si el dato no está en los documentos, di: '❌ No dispongo de ese registro específico en mis sistemas.'\n\n"
+    "Si un dato específico no está en los documentos tras aplicar los filtros, di: '❌ No dispongo de ese registro específico en mis sistemas.'\n\n"
 
     "🔚 CIERRE OBLIGATORIO:\n"
-    "Al finalizar CADA respuesta, debes preguntar brevemente si el estudiante necesita más detalles. (Ejemplo: '¿Necesitas que te brinde más información sobre esto?' o '¿Te puedo ayudar con algo más?')."
+    "Al finalizar CADA respuesta, debes preguntar brevemente si el estudiante necesita más detalles."
 )
 
 # --- 7. PANTALLA DE BIENVENIDA ---
@@ -210,7 +218,7 @@ if not st.session_state.messages:
         st.markdown("""
         <div class="welcome-card">
             <h4>📅 Horarios y Modalidad</h4>
-            <p>Ejemplo: <i>"¿Cuántas clases dura mi ramo en Diurno Presencial?"</i></p>
+            <p>Ejemplo: <i>"¿Cuáles son mis clases presenciales del 2do semestre sección 1 en Semipresencial?"</i></p>
         </div>
         """, unsafe_allow_html=True)
     with colB:
@@ -255,7 +263,6 @@ if prompt := st.chat_input("Escribe tu duda aquí..."):
                     f"ESTUDIANTE: {prompt}"
                 )
                 
-                # Volvemos a bajar la temperatura a 0.1 para que sea estricto y no se explaye
                 response = model.generate_content(full_prompt, generation_config={"temperature": 0.1})
                 
                 if response and hasattr(response, 'text') and response.text:
