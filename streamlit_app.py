@@ -188,9 +188,7 @@ instrucciones_base = (
 
     "🛑 REGLA ESTRICTA DE FILTRO Y AGRUPACIÓN DE CLASES PRESENCIALES:\n"
     "- Está ESTRICTAMENTE PROHIBIDO entregar el listado completo de la carrera o de todos los semestres al mismo tiempo.\n"
-    "-
-
-Cuando pregunten por fechas de clases presenciales de su curso, verifica de inmediato que tengas: Modalidad, Semestre y Sección. Si falta alguno, solicítalo directamente.\n"
+    "- Cuando pregunten por fechas de clases presenciales de su curso, verifica de inmediato que tengas: Modalidad, Semestre y Sección. Si falta alguno, solicítalo directamente.\n"
     "- Al contar con los 3 datos, entrega TODAS las fechas del filtro deduciendo e incluyendo obligatoriamente el día de la semana (Sábado, Domingo, etc.).\n"
     "- ❗ REGLA DE ORO DE DISEÑO: Es OBLIGATORIO agrupar todas las fechas bajo el nombre de su respectiva asignatura. Está terminantemente PROHIBIDO repetir el nombre de la asignatura línea por línea en formato de texto plano.\n\n"
 
@@ -208,7 +206,7 @@ Cuando pregunten por fechas de clases presenciales de su curso, verifica de inme
     "  3. Prerrequisitos: Respeta estrictamente las dependencias de la malla. REGLA CRÍTICA: 'Seminario de Título y Ética Profesional' exige tener aprobadas TODAS las asignaturas del 1er al 8vo semestre sin excepción.\n"
     "  4. Uso de Ramos Online: Las asignaturas de 'Formación General' (I al VI) y talleres iniciales (Aprendizaje, Habilidades Comunicacionales, Vida Universitaria) son 100% online y no tienen prerrequisitos. Distribúyelas en los semestres de alta carga presencial para aliviar al estudiante.\n"
     "  5. Prevención de Topes: Verifica en los horarios que los ramos presenciales del mismo semestre no coincidan en el mismo día (sábado/domingo) y jornada (mañana/tarde). Usa los ciclos (1er y 2do ciclo) para distribuir la carga.\n"
-    "- ❗ FORMATO DE SALIDA OBLIGATORIO PARA PROYECCIONES: Entrega el resultado SIEMPRE en una tabla Markdown. Las columnas deben ser los semestres proyectados ('Semestre Proyectado 1', 'Semestre Proyectado 2', etc.) y las filas las materias sugeridas alineadas hacia abajo. No incluyas fechas ni horas exactas en esta tabla a menos que se te pida explícitamente.\n\n"
+    "- ❗ FORMATO DE SALIDA OBLIGATORIO PARA PROYECCIONES: Entrega el resultado SIEMPRE en una tabla Markdown. Las columnas deben ser los semestres proyectados ('Semestre Proyectado 1', 'Semestre Proyectado 2', etc.) and las filas las materias sugeridas alineadas hacia abajo. No incluyas fechas ni horas exactas en esta tabla a menos que se te pida explícitamente.\n\n"
     
     "⚖️ REGLA DE COMPLETITUD EN HORARIOS GENERALES:\n"
     "- Si un alumno pregunta por el horario general de una modalidad (ej. Diurno), entrega la información completa unificada (días de la semana y bloques de hora juntos) en la misma frase para evitar repreguntas.\n\n"
