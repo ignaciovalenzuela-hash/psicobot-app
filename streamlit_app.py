@@ -4,13 +4,12 @@ import fitz
 import pandas as pd  
 import os
 import unicodedata
-import datetime 
-import time
+import datetime  
 
-# --- NUEVAS LIBRERÍAS PARA RAG (CEREBRO VECTORIAL) ---
+# --- LIBRERÍAS PARA RAG (CEREBRO VECTORIAL LOCAL) ---
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 
 # --- 1. CONFIGURACIÓN DE PÁGINA Y ESTILOS VISUALES ---
 st.set_page_config(
@@ -20,7 +19,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# [El CSS se mantiene igual para mantener la identidad visual]
 st.markdown("""
 <style>
     #MainMenu {visibility: hidden;}
@@ -36,9 +34,8 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- VERIFICACIÓN DE API KEY TEMPRANA (REQUERIDA PARA VECTORIZAR) ---
+# --- VERIFICACIÓN DE API KEY (Para el modelo de chat Gemini) ---
 if "GOOGLE_API_KEY" in st.secrets:
-    os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
     genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 else:
     st.error("Error: Configura la API Key en los Secrets de Streamlit.")
@@ -82,7 +79,7 @@ def convertir_df_a_markdown(df):
         md += "|" + "|".join(valores) + "|\n"
     return md
 
-# --- 2. MOTOR RAG: EXTRACCIÓN, CHUNKING Y VECTORIZACIÓN ---
+# --- 2. MOTOR RAG: EXTRACCIÓN, CHUNKING Y VECTORIZACIÓN LOCAL ---
 @st.cache_resource(show_spinner=True)
 def construir_cerebro_vectorial():
     texto_crudo = ""
@@ -114,56 +111,24 @@ def construir_cerebro_vectorial():
         return None, archivos_procesados
 
     # 2. Dividir texto en pedazos manejables (Chunking)
-    # 1200 caracteres por chunk con 200 de solapamiento para no cortar ideas por la mitad
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1200, chunk_overlap=200)
     chunks = text_splitter.split_text(texto_crudo)
 
-  # 3. Crear Embeddings con el modelo más reciente
-    embeddings = GoogleGenerativeAIEmbeddings(
-        model="models/text-embedding-004",
-        google_api_key=st.secrets["GOOGLE_API_KEY"]
-    )
+    # 3. Crear Embeddings LOCALES usando HuggingFace (Anti-bloqueos de Google)
+    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     
     if not chunks:
         return None, archivos_procesados
 
-    # 4. PROCESAMIENTO POR LOTES (ANTI-BLOQUEOS DE GOOGLE)
-    vectorstore = None
-    lote_size = 20  # Enviamos de a 20 fragmentos para no saturar la API
-    
-    for i in range(0, len(chunks), lote_size):
-        lote = chunks[i : i + lote_size]
-        
-        if vectorstore is None:
-            # Crea la base de datos con el primer lote
-            vectorstore = FAISS.from_texts(lote, embeddings)
-        else:
-            # Añade los siguientes lotes al cerebro ya existente
-            vectorstore.add_texts(lote)
-            
-        # Pausa estratégica de 3 segundos para refrescar la cuota de Google
-        time.sleep(3)
-        
-    return vectorstore, archivos_procesados
-    
-    # Para evitar saturar la API gratuita de Google de golpe, validamos que haya chunks
-    if not chunks:
-        return None, archivos_procesados
-        
+    # 4. Crear la base de datos vectorial FAISS
     vectorstore = FAISS.from_texts(chunks, embeddings)
-    
-    # Para evitar saturar la API gratuita de Google de golpe, validamos que haya chunks
-    if not chunks:
-        return None, archivos_procesados
         
-    vectorstore = FAISS.from_texts(chunks, embeddings)
-    
     return vectorstore, archivos_procesados
 
 # Inicializar motor
 vectorstore, archivos_activos = construir_cerebro_vectorial()
 
-# --- 3. INSTRUCCIONES BASE (Mantenemos las reglas estrictas) ---
+# --- 3. INSTRUCCIONES BASE ---
 instrucciones_base = (
     "Eres Psicobot, asistente IA de la Escuela de Psicología de UNIACC. Tu objetivo es entregar respuestas ALTAMENTE PRECISAS, CLARAS, FÁCILES DE ENTENDER y DIRECTAS.\n"
     "🔒 REGLA DE CONSISTENCIA ABSOLUTA: Mantén el estándar de calidad y tono directo. Nunca divagues ni entregues información desordenada.\n"
@@ -228,7 +193,6 @@ if rol_seleccionado == "Estudiante 🎓":
                     # 🔍 1. BÚSQUEDA SEMÁNTICA (RAG): Recuperamos solo los fragmentos relevantes
                     contexto_recuperado = ""
                     if vectorstore is not None:
-                        # Extrae los 5 fragmentos más similares a la pregunta del usuario
                         documentos_similares = vectorstore.similarity_search(prompt_actual, k=5)
                         contexto_recuperado = "\n\n...\n\n".join([doc.page_content for doc in documentos_similares])
                     else:
@@ -242,7 +206,7 @@ if rol_seleccionado == "Estudiante 🎓":
                     
                     fecha_actual_sistema = datetime.date.today().strftime("%A, %d de %B de %Y")
                     
-                    # 3. Construir el Prompt Final (Solo con la info necesaria)
+                    # 3. Construir el Prompt Final
                     full_prompt = (
                         f"{instrucciones_base}\n\n"
                         f"⏰ FECHA: {fecha_actual_sistema}\n\n"
@@ -303,7 +267,6 @@ elif rol_seleccionado == "Escuela (Admin) 🔑":
         st.success("Acceso Autorizado.")
         st.markdown("---")
         
-        # Muestra los documentos que el motor vectorial logró indexar
         with st.expander("📂 Estado del Cerebro Vectorial (Archivos Indexados)"):
             if archivos_activos:
                 for arc in archivos_activos:
