@@ -7,13 +7,17 @@ import unicodedata
 import datetime  # Mantiene la noción del tiempo real
 
 # --- 1. CONFIGURACIÓN DE PÁGINA Y ESTILOS VISUALES PERSONALIZADOS (CSS) ---
-st.set_page_config(page_title="Psicobot Pro", page_icon="🧠", layout="wide")
+st.set_page_config(
+    page_title="Psicobot Pro", 
+    page_icon="🧠", 
+    layout="wide",
+    initial_sidebar_state="expanded"  # Fuerza a que el menú lateral aparezca abierto
+)
 
 st.markdown("""
 <style>
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    header {visibility: hidden;}
 
     .titulo-psicobot {
         background: linear-gradient(45deg, #cc609b, #ff89c9);
@@ -174,7 +178,7 @@ instrucciones_base = (
     "- 🛑 REGLA DE ASISTENCIA SOLO PARA SEMIPRESENCIAL: Las asignaturas de 10 semanas exigen un 50% de asistencia mínima (el estudiante solo puede faltar a 1 clase presencial). Las asignaturas de 20 semanas exigen un 75% de asistencia mínima (también solo pueden faltar a 1 clase presencial).\n"
     "- 📅 REGLA CRÍTICA PARA TOMA DE RAMOS: Al informar las fechas de toma de ramos (inscripción de asignaturas), sé sumamente cuidadoso:\n"
     "  * Para la modalidad **Semipresencial**, existen estrictamente **dos fechas diferentes dependiendo del cohorte** del estudiante. Debes especificar ambas fechas indicando a qué cohorte corresponde cada una, o pedir al estudiante que te indique su cohorte.\n"
-    "  * Para las modalidades **Presencial Diurno** y **Presencial Vespertino**, entrega la fecha exacta que corresponda según los documentos oficiales, sin mezclarlas ni confundirlas entre sí.\n\n"
+    "  * Para las modalidades **Presencial Diurno** y **Presencial Vespertino**, entrega la fecha exactas que corresponda según los documentos oficiales, sin mezclarlas ni confundirlas entre sí.\n\n"
 
     "❄️ REGLA OBLIGATORIA PARA CONGELAMIENTO (RETIRO TEMPORAL):\n"
     "- Cuando un estudiante pregunte por congelamiento, cómo congelar o retiro temporal, debes estructurar la respuesta siguiendo estrictamente este orden jerárquico:\n"
@@ -316,7 +320,7 @@ if rol_seleccionado == "Estudiante 🎓":
     if st.session_state.messages and st.session_state.messages[-1]["role"] == "user":
         prompt_actual = st.session_state.messages[-1]["content"]
         
-        # Forzar render visual inmediato del input del usuario antes de que corra el spinner
+        # Forzar render visual inmediato del input del usuario
         with st.chat_message("user", avatar="🎓"):
             st.markdown(prompt_actual)
             
