@@ -4,9 +4,8 @@ pymupdf
 pandas
 openpyxl
 langchain
-langchain-google-genai
 langchain-community
-faiss-cpu
 langchain-text-splitters
 sentence-transformers
 langchain-huggingface
+faiss-cpu
