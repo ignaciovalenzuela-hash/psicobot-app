@@ -1,13 +1,13 @@
 import streamlit as st
 import google.generativeai as genai
 import fitz  # Para los PDFs (PyMuPDF)
-import pandas as pd  # Para el Excel
+import pandas as pd  # Para el Excel y analíticas
 import os
 import unicodedata
 import datetime  # Mantiene la noción del tiempo real
 
 # --- 1. CONFIGURACIÓN DE PÁGINA Y ESTILOS VISUALES PERSONALIZADOS (CSS) ---
-st.set_page_config(page_title="Psicobot", page_icon="🧠", layout="centered")
+st.set_page_config(page_title="Psicobot Pro", page_icon="🧠", layout="wide")
 
 st.markdown("""
 <style>
@@ -78,6 +78,32 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# --- SISTEMA DE LOGS Y ANALÍTICAS GENERALES ---
+LOG_FILE = "psicobot_logs.csv"
+
+def registrar_log(pregunta, respuesta, no_registro=False):
+    fecha_actual = datetime.datetime.now().strftime("%Y-%m-%d")
+    hora_actual = datetime.datetime.now().strftime("%H:%M:%S")
+    nuevo_registro = pd.DataFrame([{
+        "Fecha": fecha_actual,
+        "Hora": hora_actual,
+        "Pregunta": pregunta,
+        "Respuesta": respuesta,
+        "Vacio_Informacion": "SÍ" if no_registro else "NO",
+        "Feedback": "No evaluado"
+    }])
+    if not os.path.exists(LOG_FILE):
+        nuevo_registro.to_csv(LOG_FILE, index=False, encoding='utf-8')
+    else:
+        nuevo_registro.to_csv(LOG_FILE, mode='a', header=False, index=False, encoding='utf-8')
+
+def actualizar_ultimo_feedback(tipo_feedback):
+    if os.path.exists(LOG_FILE):
+        df = pd.read_csv(LOG_FILE, encoding='utf-8')
+        if not df.empty:
+            df.at[df.index[-1], 'Feedback'] = tipo_feedback
+            df.to_csv(LOG_FILE, index=False, encoding='utf-8')
+
 # --- FUNCIONES DE LIMPIEZA Y FORMATO ---
 def normalizar_columna(col):
     col = str(col).strip().upper()
@@ -92,32 +118,7 @@ def convertir_df_a_markdown(df):
         md += "|" + "|".join(valores) + "|\n"
     return md
 
-# --- 2. LOGO Y ENCABEZADO ---
-col1, col2, col3 = st.columns([1, 1.2, 1])
-with col2:
-    if os.path.exists("logo.png"):
-        st.image("logo.png", use_container_width=True)
-    else:
-        st.caption("🧠 Psicobot en línea")
-
-st.markdown("<h1 class='titulo-psicobot'>Psicobot</h1>", unsafe_allow_html=True)
-st.markdown("<div class='online-indicator'><span class='dot'></span> Asistente Oficial Activo</div>", unsafe_allow_html=True)
-st.markdown("---")
-
-# --- 3. CONFIGURACIÓN DE API ---
-if "GOOGLE_API_KEY" in st.secrets:
-    genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-else:
-    st.error("Error: Configura la API Key en los Secrets de Streamlit.")
-    st.stop()
-
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-# --- 4. CONFIGURACIÓN DEL MODELO ---
-nombre_modelo_oficial = 'models/gemini-2.5-flash'
-
-# --- 5. CARGA AUTOMÁTICA DE DOCUMENTOS ---
+# --- 2. CARGA AUTOMÁTICA DE DOCUMENTOS ---
 @st.cache_resource(show_spinner=False)
 def cargar_documentos():
     texto_total = ""
@@ -157,7 +158,7 @@ def cargar_documentos():
 
 contexto_facultad, archivos_activos = cargar_documentos()
 
-# --- 6. INSTRUCCIONES DE SISTEMA ---
+# --- 3. CONFIGURACIÓN DE INSTRUCCIONES BASE ---
 instrucciones_base = (
     "Eres Psicobot, asistente IA de la Escuela de Psicología de UNIACC. Tu objetivo es entregar respuestas ALTAMENTE PRECISAS, CLARAS, FÁCILES DE ENTENDER y DIRECTAS.\n"
     "🔒 REGLA DE CONSISTENCIA ABSOLUTA: Debes mantener este estándar de calidad, tono directo y respeto estricto a los formatos solicitados en TODAS tus respuestas, sin importar la longitud de la conversación ni el historial. Nunca divagues ni entregues información confusa o desordenada.\n\n"
@@ -206,7 +207,7 @@ instrucciones_base = (
     "  3. Prerrequisitos: Respeta estrictamente las dependencias de la malla. REGLA CRÍTICA: 'Seminario de Título y Ética Profesional' exige tener aprobadas TODAS las asignaturas del 1er al 8vo semestre sin excepción.\n"
     "  4. Uso de Ramos Online: Las asignaturas de 'Formación General' (I al VI) y talleres iniciales (Aprendizaje, Habilidades Comunicacionales, Vida Universitaria) son 100% online y no tienen prerrequisitos. Distribúyelas en los semestres de alta carga presencial para aliviar al estudiante.\n"
     "  5. Prevención de Topes: Verifica en los horarios que los ramos presenciales del mismo semestre no coincidan en el mismo día (sábado/domingo) y jornada (mañana/tarde). Usa los ciclos (1er y 2do ciclo) para distribuir la carga.\n"
-    "- ❗ FORMATO DE SALIDA OBLIGATORIO PARA PROYECCIONES: Entrega el resultado SIEMPRE en una tabla Markdown. Las columnas deben ser los semestres proyectados ('Semestre Proyectado 1', 'Semestre Proyectado 2', etc.) and las filas las materias sugeridas alineadas hacia abajo. No incluyas fechas ni horas exactas en esta tabla a menos que se te pida explícitamente.\n\n"
+    "- ❗ FORMATO DE SALIDA OBLIGATORIO PARA PROYECCIONES: Entrega el resultado SIEMPRE en una tabla Markdown. Las columnas deben ser los semestres proyectados ('Semestre Proyectado 1', 'Semestre Proyectado 2', etc.) y las filas las materias sugeridas alineadas hacia abajo. No incluyas fechas ni horas exactas en esta tabla a menos que se te pida explícitamente.\n\n"
     
     "⚖️ REGLA DE COMPLETITUD EN HORARIOS GENERALES:\n"
     "- Si un alumno pregunta por el horario general de una modalidad (ej. Diurno), entrega la información completa unificada (días de la semana y bloques de hora juntos) en la misma frase para evitar repreguntas.\n\n"
@@ -233,68 +234,188 @@ instrucciones_base = (
     "Si un dato específico no está en los documentos tras aplicar los filtros, di: '❌ No dispongo de ese registro específico en mis sistemas.'"
 )
 
-# --- 7. PANTALLA DE BIENVENIDA ---
-if not st.session_state.messages:
-    st.markdown("<h3 style='text-align: center; color: #cc609b;'>¡Hola! Estoy aquí para ayudarte 🤖</h3>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color: #555;'>Consultas sobre proyección de malla, horarios, notas y reglamentos.</p>", unsafe_allow_html=True)
-    st.markdown("<br>", unsafe_allow_html=True)
+# --- 4. BARRA LATERAL (NAVEGACIÓN DE ROLES Y FILTROS DINÁMICOS) ---
+st.sidebar.markdown("<h2 style='color:#cc609b;'>⚙️ Panel de Control</h2>", unsafe_allow_html=True)
+rol_seleccionado = st.sidebar.selectbox("Selecciona tu Rol:", ["Estudiante 🎓", "Escuela (Admin) 🔑"])
+
+# Inicializar estados de chat obligatorios
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+# --- VISTA DE ESTUDIANTE ---
+if rol_seleccionado == "Estudiante 🎓":
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("<h4 style='color:#cc609b;'>🔍 Filtro Rápido de Horarios</h4>", unsafe_allow_html=True)
+    st.sidebar.caption("Usa estos controles dinámicos para armar tu consulta automáticamente.")
     
-    colA, colB = st.columns(2)
-    with colA:
-        st.markdown("""
-        <div class="welcome-card">
-            <h4>📅 Proyección de Malla</h4>
-            <p>Ejemplo: <i>"Necesito una proyección de mi malla, ¿qué ramos puedo tomar?"</i></p>
-        </div>
-        """, unsafe_allow_html=True)
-    with colB:
-        st.markdown("""
-        <div class="welcome-card">
-            <h4>📋 Horarios y Asistencia</h4>
-            <p>Ejemplo: <i>"¿Cuáles son mis clases del 2do semestre sección 335?"</i></p>
-        </div>
-        """, unsafe_allow_html=True)
-    st.markdown("<br>", unsafe_allow_html=True)
+    mod_ui = st.sidebar.selectbox("Modalidad:", ["Presencial Diurno", "Presencial Vespertino", "Semipresencial"])
+    sem_ui = st.sidebar.text_input("Semestre (Ej: 2)", value="")
+    sec_ui = st.sidebar.text_input("Sección (Ej: 335)", value="")
+    
+    if st.sidebar.button("Generar Consulta de Horario"):
+        if sem_ui and sec_ui:
+            prompt_automatico = f"¿Cuáles son mis clases del semestre {sem_ui} sección {sec_ui} en la modalidad {mod_ui}?"
+            st.session_state.messages.append({"role": "user", "content": prompt_automatico})
+        else:
+            st.sidebar.warning("Por favor rellena Semestre y Sección.")
 
-# --- 8. VISUALIZACIÓN DEL CHAT Y GENERACIÓN DE RESPUESTA ---
-for message in st.session_state.messages:
-    avatar_icon = "🎓" if message["role"] == "user" else "🧠"
-    with st.chat_message(message["role"], avatar=avatar_icon):
-        st.markdown(message["content"])
+    # Encabezado Principal
+    col1, col2, col3 = st.columns([1, 1.2, 1])
+    with col2:
+        if os.path.exists("logo.png"):
+            st.image("logo.png", use_container_width=True)
+        else:
+            st.caption("🧠 Psicobot en línea")
 
-if prompt := st.chat_input("Escribe tu duda aquí..."):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user", avatar="🎓"):
-        st.markdown(prompt)
+    st.markdown("<h1 class='titulo-psicobot'>Psicobot</h1>", unsafe_allow_html=True)
+    st.markdown("<div class='online-indicator'><span class='dot'></span> Asistente Oficial Activo</div>", unsafe_allow_html=True)
+    st.markdown("---")
 
-    with st.chat_message("assistant", avatar="🧠"):
-        with st.spinner("Procesando consulta..."):
-            try:
-                historial_contexto = ""
-                for msg in st.session_state.messages[-5:-1]:
-                    rol = "Estudiante" if msg["role"] == "user" else "Psicobot"
-                    historial_contexto += f"{rol}: {msg['content']}\n"
-                
-                hoy = datetime.date.today()
-                fecha_actual_sistema = hoy.strftime("%A, %d de %B de %Y")
-                
-                model = genai.GenerativeModel(model_name=nombre_modelo_oficial)
-                
-                full_prompt = (
-                    f"{instrucciones_base}\n\n"
-                    f"⏰ FECHA: {fecha_actual_sistema}\n\n"
-                    f"REPOSITORIO:\n{contexto_facultad}\n\n"
-                    f"HISTORIAL:\n{historial_contexto}\n"
-                    f"ESTUDIANTE: {prompt}"
-                )
-                
-                response = model.generate_content(full_prompt, generation_config={"temperature": 0.1})
-                
-                if response and hasattr(response, 'text') and response.text:
-                    st.markdown(response.text)
-                    st.session_state.messages.append({"role": "assistant", "content": response.text})
-                else:
-                    st.warning("⚠️ El asistente no devolvió una respuesta válida. Intenta de nuevo.")
+    # API configuration
+    if "GOOGLE_API_KEY" in st.secrets:
+        genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
+    else:
+        st.error("Error: Configura la API Key en los Secrets de Streamlit.")
+        st.stop()
+
+    # Pantalla de Bienvenida Inicial
+    if not st.session_state.messages:
+        st.markdown("<h3 style='text-align: center; color: #cc609b;'>¡Hola! Estoy aquí para ayudarte 🤖</h3>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: #555;'>Consultas sobre proyección de malla, horarios, notas y reglamentos.</p>", unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        colA, colB = st.columns(2)
+        with colA:
+            st.markdown("""
+            <div class="welcome-card">
+                <h4>📅 Proyección de Malla</h4>
+                <p>Ejemplo: <i>"Necesito una proyección de mi malla, ¿qué ramos puedo tomar?"</i></p>
+            </div>
+            """, unsafe_allow_html=True)
+        with colB:
+            st.markdown("""
+            <div class="welcome-card">
+                <h4>📋 Horarios y Asistencia</h4>
+                <p>Ejemplo: <i>"¿Cuáles son mis clases del 2do semestre sección 335?"</i></p>
+            </div>
+            """, unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+
+    # Renderizar historial de chat
+    for message in st.session_state.messages:
+        avatar_icon = "🎓" if message["role"] == "user" else "🧠"
+        with st.chat_message(message["role"], avatar=avatar_icon):
+            st.markdown(message["content"])
+
+    # Captura de nueva consulta
+    if prompt := st.chat_input("Escribe tu duda aquí..."):
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        st.rerun()
+
+    # Si hay mensajes y el último es del usuario, generar respuesta
+    if st.session_state.messages and st.session_state.messages[-1]["role"] == "user":
+        prompt_actual = st.session_state.messages[-1]["content"]
+        
+        # Forzar render visual inmediato del input del usuario antes de que corra el spinner
+        with st.chat_message("user", avatar="🎓"):
+            st.markdown(prompt_actual)
+            
+        with st.chat_message("assistant", avatar="🧠"):
+            with st.spinner("Procesando consulta..."):
+                try:
+                    historial_contexto = ""
+                    for msg in st.session_state.messages[-5:-1]:
+                        rol_ctx = "Estudiante" if msg["role"] == "user" else "Psicobot"
+                        historial_contexto += f"{rol_ctx}: {msg['content']}\n"
                     
-            except Exception as e:
-                st.error(f"⚠️ Error del sistema: {e}")
+                    hoy = datetime.date.today()
+                    fecha_actual_sistema = hoy.strftime("%A, %d de %B de %Y")
+                    
+                    nombre_modelo_oficial = 'models/gemini-2.5-flash'
+                    model = genai.GenerativeModel(model_name=nombre_modelo_oficial)
+                    
+                    full_prompt = (
+                        f"{instrucciones_base}\n\n"
+                        f"⏰ FECHA: {fecha_actual_sistema}\n\n"
+                        f"REPOSITORIO:\n{contexto_facultad}\n\n"
+                        f"HISTORIAL:\n{historial_contexto}\n"
+                        f"ESTUDIANTE: {prompt_actual}"
+                    )
+                    
+                    response = model.generate_content(full_prompt, generation_config={"temperature": 0.1})
+                    
+                    if response and hasattr(response, 'text') and response.text:
+                        respuesta_texto = response.text
+                        st.markdown(respuesta_texto)
+                        st.session_state.messages.append({"role": "assistant", "content": respuesta_texto})
+                        
+                        # Guardar logs de analíticas de forma desatendida
+                        es_vacio = "❌ No dispongo de ese registro" in respuesta_texto
+                        registrar_log(prompt_actual, respuesta_texto, no_registro=es_vacio)
+                        st.rerun()
+                    else:
+                        st.warning("⚠️ El asistente no devolvió una respuesta válida. Intenta de nuevo.")
+                        
+                except Exception as e:
+                    st.error(f"⚠️ Error del sistema: {e}")
+
+    # Sistema Dinámico de Feedback para la última respuesta del asistente
+    if st.session_state.messages and st.session_state.messages[-1]["role"] == "assistant":
+        st.write("---")
+        st.caption("¿Te fue útil esta respuesta?")
+        col_feed1, col_feed2, _ = st.columns([1, 1, 8])
+        with col_feed1:
+            if st.button("👍 Sí"):
+                actualizar_ultimo_feedback("Útil (Positivo)")
+                st.success("¡Gracias por tu feedback!")
+        with col_feed2:
+            if st.button("👎 No"):
+                actualizar_ultimo_feedback("No útil (Negativo)")
+                st.error("Registrado. Trabajaremos en mejorarlo.")
+
+# --- VISTA DE ADMINISTRACIÓN (ESCUELA) ---
+elif rol_seleccionado == "Escuela (Admin) 🔑":
+    st.markdown("<h1 style='color:#cc609b;'>📊 Panel de Analíticas Institucionales</h1>", unsafe_allow_html=True)
+    st.markdown("Clave de acceso de prueba: `psico2026`")
+    
+    password = st.text_input("Introduce la contraseña de acceso:", type="password")
+    if password == "psico2026":
+        st.success("Acceso Autorizado.")
+        st.markdown("---")
+        
+        if os.path.exists(LOG_FILE):
+            df_logs = pd.read_csv(LOG_FILE, encoding='utf-8')
+            
+            # 1. Métricas clave (KPIs)
+            total_consultas = len(df_logs)
+            vacios_info = len(df_logs[df_logs["Vacio_Informacion"] == "SÍ"])
+            feedback_positivo = len(df_logs[df_logs["Feedback"] == "Útil (Positivo)"])
+            
+            kpi1, kpi2, kpi3 = st.columns(3)
+            with kpi1:
+                st.metric(label="Total Consultas Alumnos", value=total_consultas)
+            with kpi2:
+                st.metric(label="⚠️ Alertas de Vacíos de Información", value=vacios_info, delta="Acción requerida" if vacios_info > 0 else "Todo cubierto")
+                st.caption("Frecuencia con la que el bot activó la regla 'No dispongo de ese registro'.")
+            with kpi3:
+                st.metric(label="Valoraciones Positivas (👍)", value=feedback_positivo)
+            
+            st.markdown("---")
+            
+            # 2. Gráficos de tendencias temporales
+            st.markdown("### 📈 Volumen Diario de Consultas")
+            if "Fecha" in df_logs.columns and not df_logs.empty:
+                conteo_fechas = df_logs["Fecha"].value_counts().sort_index()
+                st.bar_chart(conteo_fechas)
+            
+            st.markdown("---")
+            
+            # 3. Registro bruto de auditoría
+            st.markdown("### 📋 Historial Completo de Interacciones")
+            st.dataframe(df_logs, use_container_width=True)
+            
+        else:
+            st.info("Aún no se registran interacciones en los logs para mostrar analíticas.")
+            
+    elif password != "":
+        st.error("Contraseña incorrecta. Inténtalo nuevamente.")
