@@ -117,9 +117,23 @@ def construir_cerebro_vectorial():
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1200, chunk_overlap=200)
     chunks = text_splitter.split_text(texto_crudo)
 
-    # 3. Crear Embeddings y almacenar en FAISS (Base de datos vectorial en RAM)
-    # Usamos el modelo optimizado para embeddings de Google
-    embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+   # 3. Crear Embeddings y almacenar en FAISS (Base de datos vectorial en RAM)
+    # Usamos el modelo más reciente y le pasamos la API key de forma explícita
+    embeddings = GoogleGenerativeAIEmbeddings(
+        model="models/text-embedding-004",
+        google_api_key=st.secrets["GOOGLE_API_KEY"]
+    )
+    
+    # Para evitar saturar la API gratuita de Google de golpe, validamos que haya chunks
+    if not chunks:
+        return None, archivos_procesados
+        
+    vectorstore = FAISS.from_texts(chunks, embeddings)
+    
+    # Para evitar saturar la API gratuita de Google de golpe, validamos que haya chunks
+    if not chunks:
+        return None, archivos_procesados
+        
     vectorstore = FAISS.from_texts(chunks, embeddings)
     
     return vectorstore, archivos_procesados
