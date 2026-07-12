@@ -102,16 +102,23 @@ def construir_cerebro_vectorial():
         elif a.endswith('.pdf'):
             try:
                 with fitz.open(a) as doc:
-                    for pagina in doc:
-                        texto_crudo += pagina.get_text() + "\n"
+                    for num_pag, pagina in enumerate(doc):
+                        # Usamos sort=True para que intente leer de izquierda a derecha ordenadamente
+                        texto_pagina = pagina.get_text("text", sort=True)
+                        # Etiquetamos de dónde viene la información
+                        texto_crudo += f"\n--- INICIO PDF: {a} | PÁGINA: {num_pag + 1} ---\n{texto_pagina}\n--- FIN PÁGINA ---\n"
                 archivos_procesados.append(f"📄 {a}")
             except: continue
             
     if not texto_crudo.strip():
         return None, archivos_procesados
 
-    # 2. Dividir texto en pedazos manejables (Chunking)
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1200, chunk_overlap=200)
+    # 2. Dividir texto (Ajuste RAG avanzado para PDFs)
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=2000, 
+        chunk_overlap=400,
+        separators=["\n--- FIN PÁGINA ---\n", "\n\n", "\n", " "]
+    )
     chunks = text_splitter.split_text(texto_crudo)
 
     # 3. Crear Embeddings LOCALES usando HuggingFace (Anti-bloqueos de Google)
@@ -139,13 +146,13 @@ instrucciones_base = (
     "📅 TOMA DE RAMOS: En Semipresencial existen dos fechas distintas dependiendo del cohorte. En Diurno/Vespertino es una fecha única.\n"
     "❄️ CONGELAMIENTO: 1. Orientación (hablar con Escuela), 2. Advertencia literal: 'Si presentas la solicitud de retiro temporal fuera de los plazos establecidos, tu carga académica no será eliminada y las evaluaciones realizadas durante el periodo serán consideradas para el cálculo del resultado final de las asignaturas (Art. 43).' 3. Procedimiento.\n"
     "🛑 OMISIÓN DE FUENTES: PROHIBIDO agregar de dónde sacaste la información espontáneamente (excepto el Art. 43 obligatorio). Únicamente dalo si el estudiante pregunta.\n"
-    "🛑 FILTRO DE HORARIOS: PROHIBIDO entregar todo el listado. Si falta Modalidad, Semestre o Sección, pregúntalo. \n"
+    "🛑 FILTRO DE HORARIOS: Si el estudiante pregunta por sus clases u horarios de forma general, PREGÚNTALE obligatoriamente su Modalidad, Semestre y Sección antes de buscar.\n"
     "🛠️ FORMATO PARA HORARIOS:\n"
     "### 📖 [NOMBRE ASIGNATURA]\n* **Sección:** [X] | **Semestre:** [X]\n* 📆 [Día] [Fecha] — ⏰ [Hora]\n"
     "📅 PROYECCIÓN DE MALLA: Sugiere 6-8 ramos, respeta prerrequisitos (Seminario exige 1ero a 8vo aprobado). Entrega siempre en tabla Markdown.\n"
     "⚖️ SÍNTESIS DE REGLAMENTOS: Usa máximo 3 o 4 viñetas (qué es, qué regula, sanción).\n"
     "🔑 ENLACES OBLIGATORIOS:\n- Portal de Solicitudes: [Portal de Solicitudes](https://solicitudes.uniacc.cl/login)\n- Notas finales/Horarios: [Portal Alumno](https://portal.uniacc.cl)\n- Aulas/Ramos Online Semipresencial: [eCampus](https://ecampus.uniacc.cl)\n"
-    "📌 REGLA DE PRECISIÓN: Si la información no está en el 'CONTEXTO RECUPERADO', di: '❌ No dispongo de ese registro específico en mis sistemas.'"
+    "📌 REGLA DE PRECISIÓN: Solo si el estudiante ya te dio su Sección/Semestre y de verdad no lo encuentras en el 'CONTEXTO RECUPERADO', di: '❌ No dispongo de ese registro específico en mis sistemas.'"
 )
 
 # --- 4. BARRA LATERAL ---
