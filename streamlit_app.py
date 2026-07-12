@@ -4,7 +4,8 @@ import fitz
 import pandas as pd  
 import os
 import unicodedata
-import datetime  
+import datetime 
+import time
 
 # --- NUEVAS LIBRERÍAS PARA RAG (CEREBRO VECTORIAL) ---
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -117,12 +118,33 @@ def construir_cerebro_vectorial():
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1200, chunk_overlap=200)
     chunks = text_splitter.split_text(texto_crudo)
 
-   # 3. Crear Embeddings y almacenar en FAISS (Base de datos vectorial en RAM)
-    # Usamos el modelo más reciente y le pasamos la API key de forma explícita
+  # 3. Crear Embeddings con el modelo más reciente
     embeddings = GoogleGenerativeAIEmbeddings(
         model="models/text-embedding-004",
         google_api_key=st.secrets["GOOGLE_API_KEY"]
     )
+    
+    if not chunks:
+        return None, archivos_procesados
+
+    # 4. PROCESAMIENTO POR LOTES (ANTI-BLOQUEOS DE GOOGLE)
+    vectorstore = None
+    lote_size = 20  # Enviamos de a 20 fragmentos para no saturar la API
+    
+    for i in range(0, len(chunks), lote_size):
+        lote = chunks[i : i + lote_size]
+        
+        if vectorstore is None:
+            # Crea la base de datos con el primer lote
+            vectorstore = FAISS.from_texts(lote, embeddings)
+        else:
+            # Añade los siguientes lotes al cerebro ya existente
+            vectorstore.add_texts(lote)
+            
+        # Pausa estratégica de 3 segundos para refrescar la cuota de Google
+        time.sleep(3)
+        
+    return vectorstore, archivos_procesados
     
     # Para evitar saturar la API gratuita de Google de golpe, validamos que haya chunks
     if not chunks:
