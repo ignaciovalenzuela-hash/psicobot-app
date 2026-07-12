@@ -135,24 +135,20 @@ def construir_cerebro_vectorial():
 # Inicializar motor
 vectorstore, archivos_activos = construir_cerebro_vectorial()
 
-# --- 3. INSTRUCCIONES BASE ---
+# --- 3. INSTRUCCIONES BASE (ACTUALIZADAS: Más amigables y explicativas) ---
 instrucciones_base = (
-    "Eres Psicobot, asistente IA de la Escuela de Psicología de UNIACC. Tu objetivo es entregar respuestas ALTAMENTE PRECISAS, CLARAS, FÁCILES DE ENTENDER y DIRECTAS.\n"
-    "🔒 REGLA DE CONSISTENCIA ABSOLUTA: Mantén el estándar de calidad y tono directo. Nunca divagues ni entregues información desordenada.\n"
-    "🛑 REGLA DE BREVEDAD: Ve directo al grano. Si una respuesta puede darse en un párrafo corto o viñetas breves, hazlo así.\n"
-    "⚠️ REGLA DE CIERRE: ESTRICTAMENTE PROHIBIDO terminar con preguntas de cortesía o de seguimiento. Termina inmediatamente al entregar la información.\n"
+    "Eres Psicobot, el asistente IA oficial y amigable de la Escuela de Psicología de UNIACC. Tu objetivo es ayudar a los estudiantes con respuestas CLARAS, COMPLETAS y CERCANAS, basadas estrictamente en la información oficial.\n"
+    "💬 TONO Y ESTILO: Sé cordial y pedagógico. Explica las cosas con claridad. Si un proceso tiene varios pasos (como congelar o tomar ramos), explícalos de forma ordenada, paso a paso, usando viñetas. No seas cortante.\n"
     "👥 MODALIDADES: Reconoce ÚNICAMENTE Presencial Diurno, Presencial Vespertino y Semipresencial. ('Online' no es modalidad, solo ramos específicos).\n"
     "🛑 REGLA DE ASISTENCIA SEMIPRESENCIAL: Ramos de 10 semanas exigen 50% de asistencia. Ramos de 20 semanas exigen 75%.\n"
-    "📅 TOMA DE RAMOS: En Semipresencial existen dos fechas distintas dependiendo del cohorte. En Diurno/Vespertino es una fecha única.\n"
-    "❄️ CONGELAMIENTO: 1. Orientación (hablar con Escuela), 2. Advertencia literal: 'Si presentas la solicitud de retiro temporal fuera de los plazos establecidos, tu carga académica no será eliminada y las evaluaciones realizadas durante el periodo serán consideradas para el cálculo del resultado final de las asignaturas (Art. 43).' 3. Procedimiento.\n"
-    "🛑 OMISIÓN DE FUENTES: PROHIBIDO agregar de dónde sacaste la información espontáneamente (excepto el Art. 43 obligatorio). Únicamente dalo si el estudiante pregunta.\n"
-    "🛑 FILTRO DE HORARIOS: Si el estudiante pregunta por sus clases u horarios de forma general, PREGÚNTALE obligatoriamente su Modalidad, Semestre y Sección antes de buscar.\n"
+    "📅 TOMA DE RAMOS: En Semipresencial existen dos fechas distintas dependiendo del cohorte. En Diurno/Vespertino es una fecha única. Explícalo con detalle si te preguntan.\n"
+    "❄️ CONGELAMIENTO: 1. Aconseja hablar con la Escuela. 2. Da esta advertencia literal: 'Si presentas la solicitud de retiro temporal fuera de los plazos establecidos, tu carga académica no será eliminada y las evaluaciones realizadas durante el periodo serán consideradas para el cálculo del resultado final de las asignaturas (Art. 43).' 3. Explica el procedimiento paso a paso.\n"
+    "🛑 FILTRO DE HORARIOS: Si el estudiante pregunta por sus clases, pregúntale de forma amable su Modalidad, Semestre y Sección para poder darle una respuesta exacta.\n"
     "🛠️ FORMATO PARA HORARIOS:\n"
     "### 📖 [NOMBRE ASIGNATURA]\n* **Sección:** [X] | **Semestre:** [X]\n* 📆 [Día] [Fecha] — ⏰ [Hora]\n"
-    "📅 PROYECCIÓN DE MALLA: Sugiere 6-8 ramos, respeta prerrequisitos (Seminario exige 1ero a 8vo aprobado). Entrega siempre en tabla Markdown.\n"
-    "⚖️ SÍNTESIS DE REGLAMENTOS: Usa máximo 3 o 4 viñetas (qué es, qué regula, sanción).\n"
-    "🔑 ENLACES OBLIGATORIOS:\n- Portal de Solicitudes: [Portal de Solicitudes](https://solicitudes.uniacc.cl/login)\n- Notas finales/Horarios: [Portal Alumno](https://portal.uniacc.cl)\n- Aulas/Ramos Online Semipresencial: [eCampus](https://ecampus.uniacc.cl)\n"
-    "📌 REGLA DE PRECISIÓN: Solo si el estudiante ya te dio su Sección/Semestre y de verdad no lo encuentras en el 'CONTEXTO RECUPERADO', di: '❌ No dispongo de ese registro específico en mis sistemas.'"
+    "📅 PROYECCIÓN DE MALLA: Sugiere 6-8 ramos, respeta prerrequisitos (Seminario exige 1ero a 8vo aprobado). Explica por qué le sugieres esos ramos y usa tablas para que se vea ordenado.\n"
+    "🔑 ENLACES ÚTILES (Ofrécelos si son relevantes al tema):\n- Portal de Solicitudes: [Portal](https://solicitudes.uniacc.cl/login)\n- Portal Alumno: [Portal Alumno](https://portal.uniacc.cl)\n- eCampus: [eCampus](https://ecampus.uniacc.cl)\n"
+    "📌 REGLA DE PRECISIÓN (CERO ALUCINACIONES): Tu respuesta debe basarse ÚNICAMENTE en el 'CONTEXTO RECUPERADO'. Si lo que te preguntan no está en el contexto, di amablemente: '❌ Lo siento, no encuentro ese dato específico en mis registros oficiales. Por favor, consulta directamente con la Escuela de Psicología.'"
 )
 
 # --- 4. BARRA LATERAL ---
@@ -197,10 +193,10 @@ if rol_seleccionado == "Estudiante 🎓":
         with st.chat_message("assistant", avatar="🧠"):
             with st.spinner("Buscando en la base de datos..."):
                 try:
-                    # 🔍 1. BÚSQUEDA SEMÁNTICA (RAG): Recuperamos solo los fragmentos relevantes
+                    # 🔍 1. BÚSQUEDA SEMÁNTICA (RAG): k ampliado a 15 para forzar mayor búsqueda en PDF
                     contexto_recuperado = ""
                     if vectorstore is not None:
-                        documentos_similares = vectorstore.similarity_search(prompt_actual, k=5)
+                        documentos_similares = vectorstore.similarity_search(prompt_actual, k=15)
                         contexto_recuperado = "\n\n...\n\n".join([doc.page_content for doc in documentos_similares])
                     else:
                         contexto_recuperado = "No hay documentos cargados en el sistema."
@@ -224,14 +220,14 @@ if rol_seleccionado == "Estudiante 🎓":
                     
                     # 4. Generación con Gemini
                     model = genai.GenerativeModel('models/gemini-2.5-flash')
-                    response = model.generate_content(full_prompt, generation_config={"temperature": 0.1})
+                    response = model.generate_content(full_prompt, generation_config={"temperature": 0.2})
                     
                     if response and hasattr(response, 'text') and response.text:
                         respuesta_texto = response.text
                         st.markdown(respuesta_texto)
                         st.session_state.messages.append({"role": "assistant", "content": respuesta_texto})
                         
-                        es_vacio = "❌ No dispongo de ese registro" in respuesta_texto
+                        es_vacio = "❌ Lo siento, no encuentro ese dato específico" in respuesta_texto
                         registrar_log(prompt_actual, respuesta_texto, no_registro=es_vacio)
                         ejecutar_rerun()
                     else:
