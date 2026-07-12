@@ -1,11 +1,5 @@
 streamlit
 google-generativeai
-pymupdf
+pypdf
 pandas
 openpyxl
-langchain
-langchain-community
-langchain-text-splitters
-sentence-transformers
-langchain-huggingface
-faiss-cpu
