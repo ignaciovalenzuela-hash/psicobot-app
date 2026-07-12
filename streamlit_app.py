@@ -90,31 +90,38 @@ def ejecutar_rerun():
     else:
         st.experimental_rerun()
 
-# --- SISTEMA DE LOGS Y ANALÍTICAS GENERALES ---
+# --- SISTEMA DE LOGS Y ANALÍTICAS GENERALES (CON PROTECCIÓN ANTI-CAÍDAS) ---
 LOG_FILE = "psicobot_logs.csv"
 
 def registrar_log(pregunta, respuesta, no_registro=False):
-    fecha_actual = datetime.datetime.now().strftime("%Y-%m-%d")
-    hora_actual = datetime.datetime.now().strftime("%H:%M:%S")
-    nuevo_registro = pd.DataFrame([{
-        "Fecha": fecha_actual,
-        "Hora": hora_actual,
-        "Pregunta": pregunta,
-        "Respuesta": respuesta,
-        "Vacio_Informacion": "SÍ" if no_registro else "NO",
-        "Feedback": "No evaluado"
-    }])
-    if not os.path.exists(LOG_FILE):
-        nuevo_registro.to_csv(LOG_FILE, index=False, encoding='utf-8')
-    else:
-        nuevo_registro.to_csv(LOG_FILE, mode='a', header=False, index=False, encoding='utf-8')
+    try:
+        fecha_actual = datetime.datetime.now().strftime("%Y-%m-%d")
+        hora_actual = datetime.datetime.now().strftime("%H:%M:%S")
+        nuevo_registro = pd.DataFrame([{
+            "Fecha": fecha_actual,
+            "Hora": hora_actual,
+            "Pregunta": pregunta,
+            "Respuesta": respuesta,
+            "Vacio_Informacion": "SÍ" if no_registro else "NO",
+            "Feedback": "No evaluado"
+        }])
+        if not os.path.exists(LOG_FILE):
+            nuevo_registro.to_csv(LOG_FILE, index=False, encoding='utf-8')
+        else:
+            nuevo_registro.to_csv(LOG_FILE, mode='a', header=False, index=False, encoding='utf-8')
+    except Exception as e:
+        # Silencia el error en consola de ser necesario, pero evita que la app se caiga
+        pass
 
 def actualizar_ultimo_feedback(tipo_feedback):
-    if os.path.exists(LOG_FILE):
-        df = pd.read_csv(LOG_FILE, encoding='utf-8')
-        if not df.empty:
-            df.at[df.index[-1], 'Feedback'] = tipo_feedback
-            df.to_csv(LOG_FILE, index=False, encoding='utf-8')
+    try:
+        if os.path.exists(LOG_FILE):
+            df = pd.read_csv(LOG_FILE, encoding='utf-8')
+            if not df.empty:
+                df.at[df.index[-1], 'Feedback'] = tipo_feedback
+                df.to_csv(LOG_FILE, index=False, encoding='utf-8')
+    except Exception as e:
+        pass
 
 # --- FUNCIONES DE LIMPIEZA Y FORMATO ---
 def normalizar_columna(col):
@@ -242,7 +249,7 @@ instrucciones_base = (
     "- Semipresencial: Notas de ramos en [eCampus](https://ecampus.uniacc.cl); en [Portal Alumno](https://portal.uniacc.cl) solo promedios finales.\n"
     "- Diurno/Vespertino: Revisan directo en [Portal Alumno](https://portal.uniacc.cl).\n\n"
 
-    "📌 REGLA DE ORO DE PRECISIÓN:\n"
+    "📌 REGLA DE ORO DE PRECISIDAD:\n"
     "Si un dato específico no está en los documentos tras aplicar los filtros, di: '❌ No dispongo de ese registro específico en mis sistemas.'"
 )
 
@@ -368,19 +375,35 @@ if rol_seleccionado == "Estudiante 🎓":
                 except Exception as e:
                     st.error(f"⚠️ Error del sistema: {e}")
 
-    # Sistema Dinámico de Feedback para la última respuesta del asistente
+    # --- SISTEMA DINÁMICO DE FEEDBACK BLINDADO (EVITA CONFLICTOS DE ESTADO Y LLAVES DUPLICADAS) ---
     if st.session_state.messages and st.session_state.messages[-1]["role"] == "assistant":
+        ultimo_msg = st.session_state.messages[-1]
         st.write("---")
-        st.caption("¿Te fue útil esta respuesta?")
-        col_feed1, col_feed2, _ = st.columns([1, 1, 8])
-        with col_feed1:
-            if st.button("👍 Sí"):
-                actualizar_ultimo_feedback("Útil (Positivo)")
-                st.success("¡Gracias por tu feedback!")
-        with col_feed2:
-            if st.button("👎 No"):
-                actualizar_ultimo_feedback("No útil (Negativo)")
-                st.error("Registrado. Trabajaremos en mejorarlo.")
+        
+        # Si aún no se registra valoración para esta respuesta en específico
+        if "feedback_enviado" not in ultimo_msg:
+            st.caption("¿Te fue útil esta respuesta?")
+            col_feed1, col_feed2, _ = st.columns([1, 1, 8])
+            
+            # Llaves indexadas dinámicas únicas para evitar DuplicateWidgetID
+            id_llave = len(st.session_state.messages)
+            
+            with col_feed1:
+                if st.button("👍 Sí", key=f"feed_si_{id_llave}"):
+                    actualizar_ultimo_feedback("Útil (Positivo)")
+                    ultimo_msg["feedback_enviado"] = "positivo"
+                    ejecutar_rerun()
+            with col_feed2:
+                if st.button("👎 No", key=f"feed_no_{id_llave}"):
+                    actualizar_ultimo_feedback("No útil (Negativo)")
+                    ultimo_msg["feedback_enviado"] = "negativo"
+                    ejecutar_rerun()
+        else:
+            # Reemplazo estático inmediato tras la recarga para mitigar errores de widget inestable
+            if ultimo_msg["feedback_enviado"] == "positivo":
+                st.success("¡Gracias por tu feedback! (👍 Valoración Positiva Guardada)")
+            else:
+                st.error("Registrado. Trabajaremos en mejorarlo. (👎 Valoración Negativa Guardada)")
 
 # --- VISTA DE ADMINISTRACIÓN (ESCUELA) ---
 elif rol_seleccionado == "Escuela (Admin) 🔑":
@@ -393,35 +416,38 @@ elif rol_seleccionado == "Escuela (Admin) 🔑":
         st.markdown("---")
         
         if os.path.exists(LOG_FILE):
-            df_logs = pd.read_csv(LOG_FILE, encoding='utf-8')
-            
-            # 1. Métricas clave (KPIs)
-            total_consultas = len(df_logs)
-            vacios_info = len(df_logs[df_logs["Vacio_Informacion"] == "SÍ"])
-            feedback_positivo = len(df_logs[df_logs["Feedback"] == "Útil (Positivo)"])
-            
-            kpi1, kpi2, kpi3 = st.columns(3)
-            with kpi1:
-                st.metric(label="Total Consultas Alumnos", value=total_consultas)
-            with kpi2:
-                st.metric(label="⚠️ Alertas de Vacíos de Información", value=vacios_info, delta="Acción requerida" if vacios_info > 0 else "Todo cubierto")
-                st.caption("Frecuencia con la que el bot activó la regla 'No dispongo de ese registro'.")
-            with kpi3:
-                st.metric(label="Valoraciones Positivas (👍)", value=feedback_positivo)
-            
-            st.markdown("---")
-            
-            # 2. Gráficos de tendencias temporales
-            st.markdown("### 📈 Volumen Diario de Consultas")
-            if "Fecha" in df_logs.columns and not df_logs.empty:
-                conteo_fechas = df_logs["Fecha"].value_counts().sort_index()
-                st.bar_chart(conteo_fechas)
-            
-            st.markdown("---")
-            
-            # 3. Registro bruto de auditoría
-            st.markdown("### 📋 Historial Completo de Interacciones")
-            st.dataframe(df_logs, use_container_width=True)
+            try:
+                df_logs = pd.read_csv(LOG_FILE, encoding='utf-8')
+                
+                # 1. Métricas clave (KPIs)
+                total_consultas = len(df_logs)
+                vacios_info = len(df_logs[df_logs["Vacio_Informacion"] == "SÍ"])
+                feedback_positivo = len(df_logs[df_logs["Feedback"] == "Útil (Positivo)"])
+                
+                kpi1, kpi2, kpi3 = st.columns(3)
+                with kpi1:
+                    st.metric(label="Total Consultas Alumnos", value=total_consultas)
+                with kpi2:
+                    st.metric(label="⚠️ Alertas de Vacíos de Información", value=vacios_info, delta="Acción requerida" if vacios_info > 0 else "Todo cubierto")
+                    st.caption("Frecuencia con la que el bot activó la regla 'No dispongo de ese registro'.")
+                with kpi3:
+                    st.metric(label="Valoraciones Positivas (👍)", value=feedback_positivo)
+                
+                st.markdown("---")
+                
+                # 2. Gráficos de tendencias temporales
+                st.markdown("### 📈 Volumen Diario de Consultas")
+                if "Fecha" in df_logs.columns and not df_logs.empty:
+                    conteo_fechas = df_logs["Fecha"].value_counts().sort_index()
+                    st.bar_chart(conteo_fechas)
+                
+                st.markdown("---")
+                
+                # 3. Registro bruto de auditoría
+                st.markdown("### 📋 Historial Completo de Interacciones")
+                st.dataframe(df_logs, use_container_width=True)
+            except Exception as ex_panel:
+                st.error(f"Error temporal al leer el archivo de analíticas: {ex_panel}")
             
         else:
             st.info("Aún no se registran interacciones en los logs para mostrar analíticas.")
