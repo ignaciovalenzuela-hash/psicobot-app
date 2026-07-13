@@ -1,10 +1,10 @@
 import streamlit as st
 import google.generativeai as genai
-import fitz  # Para los PDFs (PyMuPDF)
-import pandas as pd  # Para el Excel y analíticas
+import pypdf  # Nuevo lector seguro para PDFs
+import pandas as pd
 import os
 import unicodedata
-import datetime  # Mantiene la noción del tiempo real
+import datetime
 
 # --- 1. CONFIGURACIÓN DE PÁGINA Y ESTILOS VISUALES PERSONALIZADOS (CSS) ---
 st.set_page_config(
@@ -66,7 +66,7 @@ def convertir_df_a_markdown(df):
         md += "|" + "|".join(valores) + "|\n"
     return md
 
-# --- 2. CARGA COMPLETA DE DOCUMENTOS (Sin cortes para máxima precisión) ---
+# --- 2. CARGA COMPLETA DE DOCUMENTOS ---
 @st.cache_resource(show_spinner=False)
 def cargar_documentos():
     texto_total = ""
@@ -94,9 +94,14 @@ def cargar_documentos():
                 texto_total += f"\n\n=========================================\n"
                 texto_total += f"📄 DOCUMENTO REPOSITORIO: {a}\n"
                 texto_total += f"=========================================\n"
-                with fitz.open(a) as doc:
-                    for pagina in doc:
-                        texto_total += pagina.get_text()
+                
+                # Usando el nuevo lector seguro de pypdf
+                lector_pdf = pypdf.PdfReader(a)
+                for pagina in lector_pdf.pages:
+                    texto_extraido = pagina.extract_text()
+                    if texto_extraido:
+                        texto_total += texto_extraido + "\n"
+                        
                 texto_total += f"\n--- FIN DEL DOCUMENTO {a} ---\n\n"
                 archivos_procesados.append(f"📄 {a}")
             except: continue
@@ -105,7 +110,7 @@ def cargar_documentos():
 
 contexto_facultad, archivos_activos = cargar_documentos()
 
-# --- 3. CONFIGURACIÓN DE INSTRUCCIONES BASE (Tono empático pero hiper preciso) ---
+# --- 3. CONFIGURACIÓN DE INSTRUCCIONES BASE ---
 instrucciones_base = (
     "Eres Psicobot, el asistente IA oficial de la Escuela de Psicología de UNIACC. Tu objetivo es entregar respuestas ALTAMENTE PRECISAS, CLARAS y DIRECTAS, manteniendo un tono pedagógico y amable, pero respetando ESTRICTAMENTE el formato que se te indica.\n"
     "🔒 REGLA DE CONSISTENCIA ABSOLUTA: Mantén el estándar de calidad y respeto a los formatos solicitados en TODAS tus respuestas. Nunca divagues ni entregues información confusa o desordenada.\n\n"
@@ -165,7 +170,8 @@ if "messages" not in st.session_state:
 if rol_seleccionado == "Estudiante 🎓":
     col1, col2, col3 = st.columns([1, 1.2, 1])
     with col2:
-        if os.path.exists("logo.png"): st.image("logo.png", use_container_width=True)
+        # Corrección de use_container_width a width='stretch'
+        if os.path.exists("logo.png"): st.image("logo.png", width="stretch")
         else: st.caption("🧠 Psicobot en línea")
 
     st.markdown("<h1 class='titulo-psicobot'>Psicobot</h1>", unsafe_allow_html=True)
@@ -207,7 +213,6 @@ if rol_seleccionado == "Estudiante 🎓":
                     
                     fecha_actual_sistema = datetime.date.today().strftime("%A, %d de %B de %Y")
                     
-                    # Usamos temperatura muy baja (0.1) para que no alucine y respete los formatos
                     model = genai.GenerativeModel(model_name='models/gemini-2.5-flash')
                     
                     full_prompt = (
@@ -277,7 +282,8 @@ elif rol_seleccionado == "Escuela (Admin) 🔑":
                 with kpi3: st.metric("Valoraciones Positivas (👍)", len(df_logs[df_logs["Feedback"] == "Útil (Positivo)"]))
                 st.markdown("---")
                 st.markdown("### 📋 Historial Completo")
-                st.dataframe(df_logs, use_container_width=True)
+                # Corrección de use_container_width a width='stretch'
+                st.dataframe(df_logs, width="stretch")
             except Exception: pass
         else: st.info("Aún no se registran interacciones.")
     elif password != "": st.error("Contraseña incorrecta.")
