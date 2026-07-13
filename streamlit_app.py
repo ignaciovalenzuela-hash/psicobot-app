@@ -11,7 +11,7 @@ st.set_page_config(
     page_title="Psicobot Pro", 
     page_icon="🧠", 
     layout="wide",
-    initial_sidebar_state="expanded"  # Fuerza a que el menú lateral aparezca abierto por defecto
+    initial_sidebar_state="expanded"
 )
 
 st.markdown("""
@@ -84,13 +84,12 @@ st.markdown("""
 
 # --- FUNCIÓN DE CONTROL DE RERUN SEGURO ---
 def ejecutar_rerun():
-    """Garantiza la recarga del script sin importar la versión de Streamlit instalada."""
     if hasattr(st, "rerun"):
         st.rerun()
     else:
         st.experimental_rerun()
 
-# --- SISTEMA DE LOGS Y ANALÍTICAS GENERALES (CON PROTECCIÓN ANTI-CAÍDAS) ---
+# --- SISTEMA DE LOGS Y ANALÍTICAS GENERALES ---
 LOG_FILE = "psicobot_logs.csv"
 
 def registrar_log(pregunta, respuesta, no_registro=False):
@@ -166,7 +165,6 @@ def cargar_documentos():
                 texto_total += f"📄 DOCUMENTO REPOSITORIO: {a}\n"
                 texto_total += f"=========================================\n"
                 
-                # Integración con pypdf para extracción limpia de texto
                 lector_pdf = pypdf.PdfReader(a)
                 for pagina in lector_pdf.pages:
                     texto_pagina = pagina.extract_text()
@@ -271,8 +269,7 @@ if rol_seleccionado == "Estudiante 🎓":
     col1, col2, col3 = st.columns([1, 1.2, 1])
     with col2:
         if os.path.exists("logo.png"):
-            # Corrección de la sintaxis deprecada 'use_container_width=True' a la recomendada por Streamlit
-            st.image("logo.png", width=None) 
+            st.image("logo.png", width="stretch") 
         else:
             st.caption("🧠 Psicobot en línea")
 
@@ -321,7 +318,7 @@ if rol_seleccionado == "Estudiante 🎓":
         st.session_state.messages.append({"role": "user", "content": prompt})
         ejecutar_rerun()
 
-    # Procesar la respuesta del asistente si el último mensaje guardado pertenece al alumno
+    # Procesar la respuesta del asistente
     if st.session_state.messages and st.session_state.messages[-1]["role"] == "user":
         prompt_actual = st.session_state.messages[-1]["content"]
             
@@ -354,7 +351,6 @@ if rol_seleccionado == "Estudiante 🎓":
                         st.markdown(respuesta_texto)
                         st.session_state.messages.append({"role": "assistant", "content": respuesta_texto})
                         
-                        # Guardar logs de analíticas de forma desatendida
                         es_vacio = "❌ No dispongo de ese registro" in respuesta_texto
                         registrar_log(prompt_actual, respuesta_texto, no_registro=es_vacio)
                         ejecutar_rerun()
@@ -364,7 +360,7 @@ if rol_seleccionado == "Estudiante 🎓":
                 except Exception as e:
                     st.error(f"⚠️ Error del sistema: {e}")
 
-    # --- SISTEMA DINÁMICO DE FEEDBACK BLINDADO (EVITA CONFLICTOS DE ESTADO) ---
+    # --- SISTEMA DINÁMICO DE FEEDBACK ---
     if st.session_state.messages and st.session_state.messages[-1]["role"] == "assistant":
         ultimo_msg = st.session_state.messages[-1]
         st.write("---")
@@ -404,7 +400,6 @@ elif rol_seleccionado == "Escuela (Admin) 🔑":
             try:
                 df_logs = pd.read_csv(LOG_FILE, encoding='utf-8')
                 
-                # 1. Métricas clave (KPIs)
                 total_consultas = len(df_logs)
                 vacios_info = len(df_logs[df_logs["Vacio_Informacion"] == "SÍ"])
                 feedback_positivo = len(df_logs[df_logs["Feedback"] == "Útil (Positivo)"])
@@ -420,7 +415,6 @@ elif rol_seleccionado == "Escuela (Admin) 🔑":
                 
                 st.markdown("---")
                 
-                # 2. Gráficos de tendencias temporales
                 st.markdown("### 📈 Volumen Diario de Consultas")
                 if "Fecha" in df_logs.columns and not df_logs.empty:
                     conteo_fechas = df_logs["Fecha"].value_counts().sort_index()
@@ -430,8 +424,7 @@ elif rol_seleccionado == "Escuela (Admin) 🔑":
                 
                 # 3. Registro bruto de auditoría
                 st.markdown("### 📋 Historial Completo de Interacciones")
-                # Se ajustó el parámetro para compatibilidad con versiones recientes
-                st.dataframe(df_logs, width=None)
+                st.dataframe(df_logs, width="stretch")
             except Exception as ex_panel:
                 st.error(f"Error temporal al leer el archivo de analíticas: {ex_panel}")
             
