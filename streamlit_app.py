@@ -1,6 +1,6 @@
 import streamlit as st
 import google.generativeai as genai
-import fitz  # Para los PDFs (PyMuPDF)
+import pypdf  # Reemplazo seguro de fitz para evitar caídas del sistema
 import pandas as pd  # Para el Excel y analíticas
 import os
 import unicodedata
@@ -165,9 +165,14 @@ def cargar_documentos():
                 texto_total += f"\n\n=========================================\n"
                 texto_total += f"📄 DOCUMENTO REPOSITORIO: {a}\n"
                 texto_total += f"=========================================\n"
-                with fitz.open(a) as doc:
-                    for pagina in doc:
-                        texto_total += pagina.get_text()
+                
+                # Integración con pypdf para extracción limpia de texto
+                lector_pdf = pypdf.PdfReader(a)
+                for pagina in lector_pdf.pages:
+                    texto_pagina = pagina.extract_text()
+                    if texto_pagina:
+                        texto_total += texto_pagina + "\n"
+                        
                 texto_total += f"\n--- FIN DEL DOCUMENTO {a} ---\n\n"
                 archivos_procesados.append(f"📄 {a}")
             except: continue
@@ -195,7 +200,7 @@ instrucciones_base = (
     "  * Para las modalidades **Presencial Diurno** y **Presencial Vespertino**, entrega la fecha exacta que corresponda según los documentos oficiales, sin mezclarlas ni confundirlas entre sí.\n\n"
 
     "❄️ REGLA OBLIGATORIA PARA CONGELAMIENTO (RETIRO TEMPORAL):\n"
-    "- Cuando un estudiante pregunte por congelamiento, cómo congelar o retiro temporal, debes estructurar la respuesta siguiendo estrictamente este orden jerárquico:\n"
+    "- Cuando un estudiante pregunte por congelamiento, cómo congelar o retiro temporal, debesestructurar la respuesta siguiendo estrictamente este orden jerárquico:\n"
     "  1. **Orientación de Acompañamiento:** Antes de dar los pasos operativos, indícale de forma clara que antes de congelar puede contactarse directamente con la Escuela para revisar diferentes opciones y apoyos personalizados que se le pueden brindar para continuar sus estudios y evitar la suspensión.\n"
     "  2. **Advertencia de Plazos Extratemporales:** Advierte explícitamente sobre los plazos normativos incluyendo exactamente la siguiente frase textual: \"Si presentas la solicitud de retiro temporal fuera de los plazos establecidos, tu carga académica no será eliminada y las evaluaciones realizadas durante el periodo serán consideradas para el cálculo del resultado final de las asignaturas (Art. 43).\"\n"
     "  3. **Procedimiento Operativo:** Entrega los pasos breves para ingresar el requerimiento a través del respectivo portal.\n\n"
@@ -212,7 +217,7 @@ instrucciones_base = (
     "- ❗ REGLA DE ORO DE DISEÑO: Es OBLIGATORIO agrupar todas las fechas bajo el nombre de su respectiva asignatura. Está terminantemente PROHIBIDO repetir el nombre de la asignatura línea por línea en formato de texto plano.\n\n"
 
     "🛠️ FORMATO OBLIGATORIO PARA HORARIOS FILTRADOS:\n"
-    "Debesestructurar la información exactamente con este diseño visual para cada asignatura encontrada:\n"
+    "Debes estructurar la información exactamente con este diseño visual para cada asignatura encontrada:\n"
     "### 📖 [NOMBRE ASIGNATURA]\n"
     "* **Sección:** [X] | **Semestre:** [X]\n"
     "* 📆 [Día de la semana] [Fecha] — ⏰ [Hora Inicio a Fin]\n"
@@ -266,7 +271,8 @@ if rol_seleccionado == "Estudiante 🎓":
     col1, col2, col3 = st.columns([1, 1.2, 1])
     with col2:
         if os.path.exists("logo.png"):
-            st.image("logo.png", use_container_width=True)
+            # Corrección de la sintaxis deprecada 'use_container_width=True' a la recomendada por Streamlit
+            st.image("logo.png", width=None) 
         else:
             st.caption("🧠 Psicobot en línea")
 
@@ -424,7 +430,8 @@ elif rol_seleccionado == "Escuela (Admin) 🔑":
                 
                 # 3. Registro bruto de auditoría
                 st.markdown("### 📋 Historial Completo de Interacciones")
-                st.dataframe(df_logs, use_container_width=True)
+                # Se ajustó el parámetro para compatibilidad con versiones recientes
+                st.dataframe(df_logs, width=None)
             except Exception as ex_panel:
                 st.error(f"Error temporal al leer el archivo de analíticas: {ex_panel}")
             
