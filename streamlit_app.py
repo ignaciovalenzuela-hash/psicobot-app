@@ -1,49 +1,116 @@
 import streamlit as st
 import google.generativeai as genai
-import pypdf  # Nuevo lector seguro para PDFs
-import pandas as pd
+import fitz  # Para los PDFs (PyMuPDF)
+import pandas as pd  # Para el Excel y analíticas
 import os
 import unicodedata
-import datetime
+import datetime  # Mantiene la noción del tiempo real
 
 # --- 1. CONFIGURACIÓN DE PÁGINA Y ESTILOS VISUALES PERSONALIZADOS (CSS) ---
 st.set_page_config(
     page_title="Psicobot Pro", 
     page_icon="🧠", 
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded"  # Fuerza a que el menú lateral aparezca abierto por defecto
 )
 
 st.markdown("""
 <style>
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    .titulo-psicobot { background: linear-gradient(45deg, #cc609b, #ff89c9); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-align: center; font-weight: 800; font-size: 3.2rem; margin-bottom: 0rem; }
-    .online-indicator { display: flex; justify-content: center; align-items: center; gap: 8px; color: #555; font-size: 0.95rem; margin-top: -5px; margin-bottom: 25px; font-weight: 500; }
-    .dot { height: 10px; width: 10px; background-color: #ff89c9; border-radius: 50%; display: inline-block; animation: pulse 2s infinite; }
-    @keyframes pulse { 0% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 137, 201, 0.7); } 70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(255, 137, 201, 0); } 100% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 137, 201, 0); } }
-    .welcome-card { background-color: #ffffff; border-left: 5px solid #cc609b; padding: 18px; border-radius: 8px; box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.05); margin-bottom: 15px; transition: transform 0.3s ease, box-shadow 0.3s ease; }
-    .welcome-card:hover { transform: translateY(-3px); box-shadow: 0px 8px 20px rgba(204, 96, 155, 0.15); border-left: 5px solid #ff89c9; }
-    .welcome-card h4 { color: #cc609b; margin-top: 0; margin-bottom: 8px; font-weight: 700; }
-    .welcome-card p { color: #444444; font-size: 0.92rem; margin: 0; }
+
+    .titulo-psicobot {
+        background: linear-gradient(45deg, #cc609b, #ff89c9);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        text-align: center;
+        font-weight: 800;
+        font-size: 3.2rem;
+        margin-bottom: 0rem;
+    }
+
+    .online-indicator {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 8px;
+        color: #555;
+        font-size: 0.95rem;
+        margin-top: -5px;
+        margin-bottom: 25px;
+        font-weight: 500;
+    }
+    .dot {
+        height: 10px;
+        width: 10px;
+        background-color: #ff89c9;
+        border-radius: 50%;
+        display: inline-block;
+        animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+        0% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 137, 201, 0.7); }
+        70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(255, 137, 201, 0); }
+        100% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 137, 201, 0); }
+    }
+
+    .welcome-card {
+        background-color: #ffffff;
+        border-left: 5px solid #cc609b;
+        padding: 18px;
+        border-radius: 8px;
+        box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.05);
+        margin-bottom: 15px;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .welcome-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0px 8px 20px rgba(204, 96, 155, 0.15);
+        border-left: 5px solid #ff89c9;
+    }
+    .welcome-card h4 {
+        color: #cc609b;
+        margin-top: 0;
+        margin-bottom: 8px;
+        font-weight: 700;
+    }
+    .welcome-card p {
+        color: #444444;
+        font-size: 0.92rem;
+        margin: 0;
+    }
 </style>
 """, unsafe_allow_html=True)
 
+# --- FUNCIÓN DE CONTROL DE RERUN SEGURO ---
 def ejecutar_rerun():
-    if hasattr(st, "rerun"): st.rerun()
-    else: st.experimental_rerun()
+    """Garantiza la recarga del script sin importar la versión de Streamlit instalada."""
+    if hasattr(st, "rerun"):
+        st.rerun()
+    else:
+        st.experimental_rerun()
 
-# --- SISTEMA DE LOGS Y ANALÍTICAS GENERALES ---
+# --- SISTEMA DE LOGS Y ANALÍTICAS GENERALES (CON PROTECCIÓN ANTI-CAÍDAS) ---
 LOG_FILE = "psicobot_logs.csv"
 
 def registrar_log(pregunta, respuesta, no_registro=False):
     try:
         fecha_actual = datetime.datetime.now().strftime("%Y-%m-%d")
         hora_actual = datetime.datetime.now().strftime("%H:%M:%S")
-        nuevo_registro = pd.DataFrame([{ "Fecha": fecha_actual, "Hora": hora_actual, "Pregunta": pregunta, "Respuesta": respuesta, "Vacio_Informacion": "SÍ" if no_registro else "NO", "Feedback": "No evaluado" }])
-        if not os.path.exists(LOG_FILE): nuevo_registro.to_csv(LOG_FILE, index=False, encoding='utf-8')
-        else: nuevo_registro.to_csv(LOG_FILE, mode='a', header=False, index=False, encoding='utf-8')
-    except Exception: pass
+        nuevo_registro = pd.DataFrame([{
+            "Fecha": fecha_actual,
+            "Hora": hora_actual,
+            "Pregunta": pregunta,
+            "Respuesta": respuesta,
+            "Vacio_Informacion": "SÍ" if no_registro else "NO",
+            "Feedback": "No evaluado"
+        }])
+        if not os.path.exists(LOG_FILE):
+            nuevo_registro.to_csv(LOG_FILE, index=False, encoding='utf-8')
+        else:
+            nuevo_registro.to_csv(LOG_FILE, mode='a', header=False, index=False, encoding='utf-8')
+    except Exception as e:
+        pass
 
 def actualizar_ultimo_feedback(tipo_feedback):
     try:
@@ -52,21 +119,24 @@ def actualizar_ultimo_feedback(tipo_feedback):
             if not df.empty:
                 df.at[df.index[-1], 'Feedback'] = tipo_feedback
                 df.to_csv(LOG_FILE, index=False, encoding='utf-8')
-    except Exception: pass
+    except Exception as e:
+        pass
 
+# --- FUNCIONES DE LIMPIEZA Y FORMATO ---
 def normalizar_columna(col):
     col = str(col).strip().upper()
     return ''.join(ch for ch in unicodedata.normalize('NFD', col) if unicodedata.category(ch) != 'Mn')
 
 def convertir_df_a_markdown(df):
     columnas = df.columns.tolist()
-    md = "|" + "|".join(columnas) + "|\n|" + "|".join(["---"] * len(columnas)) + "|\n"
+    md = "|" + "|".join(columnas) + "|\n"
+    md += "|" + "|".join(["---"] * len(columnas)) + "|\n"
     for _, fila in df.iterrows():
         valores = [str(val).strip() if pd.notna(val) else "" for val in fila.values]
         md += "|" + "|".join(valores) + "|\n"
     return md
 
-# --- 2. CARGA COMPLETA DE DOCUMENTOS ---
+# --- 2. CARGA AUTOMÁTICA DE DOCUMENTOS ---
 @st.cache_resource(show_spinner=False)
 def cargar_documentos():
     texto_total = ""
@@ -75,8 +145,9 @@ def cargar_documentos():
     for a in os.listdir():
         if a.endswith(('.xlsx', '.xls', '.csv')):
             df = None
-            try: df = pd.read_csv(a, encoding='utf-8') if a.endswith('.csv') else pd.read_excel(a)
-            except: 
+            try:
+                df = pd.read_csv(a, encoding='utf-8') if a.endswith('.csv') else pd.read_excel(a)
+            except:
                 try: df = pd.read_csv(a, encoding='latin-1')
                 except: continue
             
@@ -94,14 +165,9 @@ def cargar_documentos():
                 texto_total += f"\n\n=========================================\n"
                 texto_total += f"📄 DOCUMENTO REPOSITORIO: {a}\n"
                 texto_total += f"=========================================\n"
-                
-                # Usando el nuevo lector seguro de pypdf
-                lector_pdf = pypdf.PdfReader(a)
-                for pagina in lector_pdf.pages:
-                    texto_extraido = pagina.extract_text()
-                    if texto_extraido:
-                        texto_total += texto_extraido + "\n"
-                        
+                with fitz.open(a) as doc:
+                    for pagina in doc:
+                        texto_total += pagina.get_text()
                 texto_total += f"\n--- FIN DEL DOCUMENTO {a} ---\n\n"
                 archivos_procesados.append(f"📄 {a}")
             except: continue
@@ -112,94 +178,144 @@ contexto_facultad, archivos_activos = cargar_documentos()
 
 # --- 3. CONFIGURACIÓN DE INSTRUCCIONES BASE ---
 instrucciones_base = (
-    "Eres Psicobot, el asistente IA oficial de la Escuela de Psicología de UNIACC. Tu objetivo es entregar respuestas ALTAMENTE PRECISAS, CLARAS y DIRECTAS, manteniendo un tono pedagógico y amable, pero respetando ESTRICTAMENTE el formato que se te indica.\n"
-    "🔒 REGLA DE CONSISTENCIA ABSOLUTA: Mantén el estándar de calidad y respeto a los formatos solicitados en TODAS tus respuestas. Nunca divagues ni entregues información confusa o desordenada.\n\n"
+    "Eres Psicobot, asistente IA de la Escuela de Psicología de UNIACC. Tu objetivo es entregar respuestas ALTAMENTE PRECISAS, CLARAS, FÁCILES DE ENTENDER y DIRECTAS.\n"
+    "🔒 REGLA DE CONSISTENCIA ABSOLUTA: Debes mantener este estándar de calidad, tono directo y respeto estricto a los formatos solicitados en TODAS tus respuestas, sin importar la longitud de la conversación ni el historial. Nunca divagues ni entregues información confusa o desordenada.\n\n"
     
     "🛑 REGLA DE BREVEDAD Y CONCISIÓN EXTREMA:\n"
-    "- Está ESTRICTAMENTE PROHIBIDO entregar respuestas con introducciones largas. Ve directo al grano. Explica de forma amable, pero corta. Si una respuesta puede darse en un par de viñetas breves, hazlo así.\n\n"
+    "- Está ESTRICTAMENTE PROHIBIDO entregar respuestas extensas, detalladas en exceso o con introducciones largas. Ve directo al grano. El exceso de texto confunde al estudiante. Si una respuesta puede darse en un párrafo corto o un par de viñetas breves, hazlo así.\n\n"
 
-    "⚠️ REGLA CRÍTICA DE CIERRE: Está ESTRICTAMENTE PROHIBIDO terminar tus respuestas con preguntas de cortesía, de seguimiento o listas numeradas al final. Termina inmediatamente al entregar la información.\n\n"
+    "⚠️ REGLA CRÍTICA DE CIERRE: Está ESTRICTAMENTE PROHIBIDO terminar tus respuestas con preguntas de cortesía, de seguimiento o cierres como '¿Necesitas más detalles?', '¿Te puedo ayudar con algo más?' o listas numeradas al final. Termina inmediatamente al entregar la información.\n\n"
     
     "👥 REGLA ESTRICTA DE MODALIDADES, ASISTENCIA Y TOMA DE RAMOS:\n"
-    "- Reconoce ÚNICAMENTE tres modalidades: 1. Presencial Diurno, 2. Presencial Vespertino y 3. Semipresencial. ('Online' NO es una modalidad de la carrera).\n"
-    "- 🛑 REGLA DE ASISTENCIA SOLO PARA SEMIPRESENCIAL: Asignaturas de 10 semanas exigen un 50% de asistencia mínima. Asignaturas de 20 semanas exigen un 75%.\n"
-    "- 📅 TOMA DE RAMOS: En Semipresencial, existen estrictamente dos fechas diferentes dependiendo del cohorte. En Diurno/Vespertino es una fecha única.\n\n"
+    "- Reconoce ÚNICAMENTE tres modalidades de estudio: 1. Presencial Diurno, 2. Presencial Vespertino y 3. Semipresencial.\n"
+    "- 'Online' NO es una modalidad de la carrera. Solo existen asignaturas específicas (como Formación General o Talleres) que se dictan en formato 100% online dentro de las 3 modalidades oficiales. Si el estudiante dice ser de 'modalidad online', corrígelo amablemente y pregúntale a cuál de las 3 modalidades oficiales pertenece.\n"
+    "- 🛑 REGLA DE ASISTENCIA SOLO PARA SEMIPRESENCIAL: Las asignaturas de 10 semanas exigen un 50% de asistencia mínima (el estudiante solo puede faltar a 1 clase presencial). Las asignaturas de 20 semanas exigen un 75% de asistencia mínima (también solo pueden faltar a 1 clase presencial).\n"
+    "- 📅 REGLA CRÍTICA PARA TOMA DE RAMOS: Al informar las fechas de toma de ramos (inscripción de asignaturas), sé sumamente cuidadoso:\n"
+    "  * Para la modalidad **Semipresencial**, existen estrictamente **dos fechas diferentes dependiendo del cohorte** del estudiante. Debes especificar ambas fechas indicando a qué cohorte corresponde cada una, o pedir al estudiante que te indique su cohorte.\n"
+    "  * Para las modalidades **Presencial Diurno** y **Presencial Vespertino**, entrega la fecha exacta que corresponda según los documentos oficiales, sin mezclarlas ni confundirlas entre sí.\n\n"
 
     "❄️ REGLA OBLIGATORIA PARA CONGELAMIENTO (RETIRO TEMPORAL):\n"
-    "Estructura así: 1. Orientación (hablar con Escuela primero). 2. Advertencia textual OBLIGATORIA: 'Si presentas la solicitud de retiro temporal fuera de los plazos establecidos, tu carga académica no será eliminada y las evaluaciones realizadas durante el periodo serán consideradas para el cálculo del resultado final de las asignaturas (Art. 43).' 3. Procedimiento breve.\n\n"
+    "- Cuando un estudiante pregunte por congelamiento, cómo congelar o retiro temporal, debes estructurar la respuesta siguiendo estrictamente este orden jerárquico:\n"
+    "  1. **Orientación de Acompañamiento:** Antes de dar los pasos operativos, indícale de forma clara que antes de congelar puede contactarse directamente con la Escuela para revisar diferentes opciones y apoyos personalizados que se le pueden brindar para continuar sus estudios y evitar la suspensión.\n"
+    "  2. **Advertencia de Plazos Extratemporales:** Advierte explícitamente sobre los plazos normativos incluyendo exactamente la siguiente frase textual: \"Si presentas la solicitud de retiro temporal fuera de los plazos establecidos, tu carga académica no será eliminada y las evaluaciones realizadas durante el periodo serán consideradas para el cálculo del resultado final de las asignaturas (Art. 43).\"\n"
+    "  3. **Procedimiento Operativo:** Entrega los pasos breves para ingresar el requerimiento a través del respectivo portal.\n\n"
 
     "🛑 REGLA DE OMISIÓN DE FUENTES:\n"
-    "- Está ESTRICTAMENTE PROHIBIDO agregar de dónde sacaste la información de manera espontánea (Ej: NO digas 'según el reglamento'). Única excepción: el '(Art. 43)' en la regla de congelamiento.\n\n"
+    "- Está ESTRICTAMENTE PROHIBIDO agregar de dónde sacaste la información de manera espontánea. No cites nombres de archivos ni pongas referencias de documentos (Ej: NO digas 'según el reglamento' ni '(Art. 23)').\n"
+    "- 🚨 EXCEPCIÓN ÚNICA: Se autoriza y exige mostrar el '(Art. 43)' únicamente dentro de la frase literal obligatoria de la regla de congelamiento.\n"
+    "- ÚNICAMENTE revelarás otra fuente si el estudiante te lo pregunta de forma explícita (Ej: '¿De qué parte del reglamento sale eso?').\n\n"
 
     "🛑 REGLA ESTRICTA DE FILTRO Y AGRUPACIÓN DE CLASES PRESENCIALES:\n"
-    "- Pide Modalidad, Semestre y Sección si no te los dan.\n"
-    "- ❗ REGLA DE ORO DE DISEÑO: Es OBLIGATORIO agrupar todas las fechas bajo el nombre de su respectiva asignatura.\n\n"
+    "- Está ESTRICTAMENTE PROHIBIDO entregar el listado completo de la carrera o de todos los semestres al mismo tiempo.\n"
+    "- Cuando pregunten por fechas de clases presenciales de su curso, verifica de inmediato que tengas: Modalidad, Semestre y Sección. Si falta alguno, solicítalo directamente.\n"
+    "- Al contar con los 3 datos, entrega TODAS las fechas del filtro deduciendo e incluyendo obligatoriamente el día de la semana (Sábado, Domingo, etc.).\n"
+    "- ❗ REGLA DE ORO DE DISEÑO: Es OBLIGATORIO agrupar todas las fechas bajo el nombre de su respectiva asignatura. Está terminantemente PROHIBIDO repetir el nombre de la asignatura línea por línea en formato de texto plano.\n\n"
 
     "🛠️ FORMATO OBLIGATORIO PARA HORARIOS FILTRADOS:\n"
-    "Debes estructurar la información EXACTAMENTE con este diseño visual:\n"
+    "Debesestructurar la información exactamente con este diseño visual para cada asignatura encontrada:\n"
     "### 📖 [NOMBRE ASIGNATURA]\n"
     "* **Sección:** [X] | **Semestre:** [X]\n"
+    "* 📆 [Día de la semana] [Fecha] — ⏰ [Hora Inicio a Fin]\n"
     "* 📆 [Día de la semana] [Fecha] — ⏰ [Hora Inicio a Fin]\n\n"
 
-    "📅 REGLA PARA PROYECCIÓN DE MALLA CURRICULAR:\n"
-    "- Sugiere entre 6 y 8 asignaturas. Respeta prerrequisitos ('Seminario de Título y Ética Profesional' exige tener aprobadas TODAS las asignaturas del 1er al 8vo semestre sin excepción).\n"
-    "- Usa ramos online ('Formación General') para alivianar la carga presencial.\n"
-    "- ❗ FORMATO DE SALIDA OBLIGATORIO PARA PROYECCIONES: Entrega el resultado SIEMPRE en una tabla Markdown.\n\n"
+    "📅 REGLA PARA PROYECCIÓN DE MALLA CURRICULAR Y PLANIFICACIÓN ACADÉMICA:\n"
+    "- Cuando un estudiante solicite una proyección de su avance o malla, actúa bajo las siguientes directrices usando la base de conocimientos:\n"
+    "  1. Identificación del Avance: Solicita su lista de asignaturas aprobadas si aún no la ha entregado.\n"
+    "  2. Carga Equilibrada: Sugiere entre 6 y 8 asignaturas por semestre proyectado, combinando ramos teóricos, prácticos y clínicos/intervenciones.\n"
+    "  3. Prerrequisitos: Respeta estrictamente las dependencias de la malla. REGLA CRÍTICA: 'Seminario de Título y Ética Profesional' exige tener aprobadas TODAS las asignaturas del 1er al 8vo semestre sin excepción.\n"
+    "  4. Uso de Ramos Online: Las asignaturas de 'Formación General' (I al VI) y talleres iniciales (Aprendizaje, Habilidades Comunicacionales, Vida Universitaria) son 100% online y no tienen prerrequisitos. Distribúyelas en los semestres de alta carga presencial para aliviar al estudiante.\n"
+    "  5. Prevención de Topes: Verifica en los horarios que los ramos presenciales del mismo semestre no coincidan en el mismo día (sábado/domingo) y jornada (mañana/tarde). Usa los ciclos (1er y 2do ciclo) para distribuir la carga.\n"
+    "- ❗ FORMATO DE SALIDA OBLIGATORIO PARA PROYECCIONES: Entrega el resultado SIEMPRE en una tabla Markdown. Las columnas deben ser los semestres proyectados ('Semestre Proyectado 1', 'Semestre Proyectado 2', etc.) y las filas las materias sugeridas alineadas hacia abajo. No incluyas fechas ni horas exactas en esta tabla a menos que se te pida explícitamente.\n\n"
+    
+    "⚖️ REGLA DE COMPLETITUD EN HORARIOS GENERALES:\n"
+    "- Si un alumno pregunta por el horario general de una modalidad (ej. Diurno), entrega la información completa unificada (días de la semana y bloques de hora juntos) en la misma frase para evitar repreguntas.\n\n"
 
     "⚖️ REGLA DE SÍNTESIS PARA REGLAMENTOS:\n"
-    "- Usa un formato ejecutivo de máximo 3 o 4 viñetas cortas (qué es, qué regula y la sanción principal).\n\n"
+    "- Al responder sobre reglamentos de la institución, usa un formato ejecutivo directo de máximo 3 o 4 viñetas (bullet points) cortas centrándote en: qué es, qué regula y la sanción/consecuencia principal.\n\n"
+
+    "📝 SOLICITUDES Y TRÁMITES CORRIENTES:\n"
+    "Ruta breve ante solicitudes académicas generales:\n"
+    "1. Ingresa al [Portal de Solicitudes](https://solicitudes.uniacc.cl/login) con tus credenciales de portal.\n"
+    "2. Ruta: Requerimiento académico > Subcategoría correspondiente.\n"
+    "3. Plazos: Generalmente 48 horas (máximo legal 15 días hábiles).\n\n"
 
     "🔑 PORTALES Y ENLACES OBLIGATORIOS (BLINDAJE DE LINKS):\n"
-    "- Queda terminantemente PROHIBIDO inventar URLs. Usa OBLIGATORIAMENTE estos enlaces:\n"
-    "  * Para gestionar trámites o requerimientos: [Portal de Solicitudes](https://solicitudes.uniacc.cl/login)\n"
-    "  * Para notas de Diurno/Vespertino: [Portal Alumno](https://portal.uniacc.cl)\n"
-    "  * Para aulas virtuales o notas Semipresencial: [eCampus](https://ecampus.uniacc.cl)\n\n"
+    "- 🔗 REGLA DE ENLACES ESTRICTOS: Queda terminantemente PROHIBIDO inventar, omitir, truncar o usar URLs distintas a las configuradas a continuación. Cada vez que tu respuesta implique realizar una acción en una plataforma, debes incrustar de forma obligatoria el enlace Markdown hipervinculado con los siguientes destinos exactos de UNIACC:\n"
+    "  * Para gestionar trámites, retiros o requerimientos académicos institucionales: [Portal de Solicitudes](https://solicitudes.uniacc.cl/login)\n"
+    "  * Para revisar horarios presenciales, avance curricular y notas finales de Diurno/Vespertino: [Portal Alumno](https://portal.uniacc.cl)\n"
+    "  * Para acceder a aulas virtuales, evaluaciones continuas y asignaturas online de Semipresencial: [eCampus](https://ecampus.uniacc.cl)\n"
+    "- Claves: Alumnos nuevos entran con RUT. Alumnos antiguos con su contraseña.\n"
+    "- Semipresencial: Notas de ramos en [eCampus](https://ecampus.uniacc.cl); en [Portal Alumno](https://portal.uniacc.cl) solo promedios finales.\n"
+    "- Diurno/Vespertino: Revisan directo en [Portal Alumno](https://portal.uniacc.cl).\n\n"
 
     "📌 REGLA DE ORO DE PRECISIÓN:\n"
-    "Si un dato específico no está en el REPOSITORIO, di: '❌ No dispongo de ese registro específico en mis sistemas.'"
+    "Si un dato específico no está en los documentos tras aplicar los filtros, di: '❌ No dispongo de ese registro específico en mis sistemas.'"
 )
 
-# --- 4. BARRA LATERAL Y NAVEGACIÓN ---
+# --- 4. BARRA LATERAL (NAVEGACIÓN DE ROLES LIMPIA) ---
 st.sidebar.markdown("<h2 style='color:#cc609b;'>⚙️ Panel de Control</h2>", unsafe_allow_html=True)
 rol_seleccionado = st.sidebar.selectbox("Selecciona tu Rol:", ["Estudiante 🎓", "Escuela (Admin) 🔑"])
 
+# Inicializar estados de chat obligatorios
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
 # --- VISTA DE ESTUDIANTE ---
 if rol_seleccionado == "Estudiante 🎓":
+    # Encabezado Principal
     col1, col2, col3 = st.columns([1, 1.2, 1])
     with col2:
-        # Corrección de use_container_width a width='stretch'
-        if os.path.exists("logo.png"): st.image("logo.png", width="stretch")
-        else: st.caption("🧠 Psicobot en línea")
+        if os.path.exists("logo.png"):
+            st.image("logo.png", use_container_width=True)
+        else:
+            st.caption("🧠 Psicobot en línea")
 
     st.markdown("<h1 class='titulo-psicobot'>Psicobot</h1>", unsafe_allow_html=True)
     st.markdown("<div class='online-indicator'><span class='dot'></span> Asistente Oficial Activo</div>", unsafe_allow_html=True)
     st.markdown("---")
 
-    if "GOOGLE_API_KEY" in st.secrets: genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
+    # API configuration
+    if "GOOGLE_API_KEY" in st.secrets:
+        genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
     else:
         st.error("Error: Configura la API Key en los Secrets de Streamlit.")
         st.stop()
 
+    # Pantalla de Bienvenida Inicial
     if not st.session_state.messages:
         st.markdown("<h3 style='text-align: center; color: #cc609b;'>¡Hola! Estoy aquí para ayudarte 🤖</h3>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center; color: #555;'>Consultas sobre proyección de malla, horarios, notas y reglamentos.</p><br>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: #555;'>Consultas sobre proyección de malla, horarios, notas y reglamentos.</p>", unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
         
         colA, colB = st.columns(2)
-        with colA: st.markdown("""<div class="welcome-card"><h4>📅 Proyección de Malla</h4><p>Ejemplo: <i>"Necesito una proyección de mi malla, ¿qué ramos puedo tomar?"</i></p></div>""", unsafe_allow_html=True)
-        with colB: st.markdown("""<div class="welcome-card"><h4>📋 Horarios y Asistencia</h4><p>Ejemplo: <i>"¿Cuáles son mis clases del 2do semestre sección 335?"</i></p></div>""", unsafe_allow_html=True)
+        with colA:
+            st.markdown("""
+            <div class="welcome-card">
+                <h4>📅 Proyección de Malla</h4>
+                <p>Ejemplo: <i>"Necesito una proyección de mi malla, ¿qué ramos puedo tomar?"</i></p>
+            </div>
+            """, unsafe_allow_html=True)
+        with colB:
+            st.markdown("""
+            <div class="welcome-card">
+                <h4>📋 Horarios y Asistencia</h4>
+                <p>Ejemplo: <i>"¿Cuáles son mis clases del 2do semestre sección 335?"</i></p>
+            </div>
+            """, unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
 
+    # Renderizar historial completo de chat
     for message in st.session_state.messages:
         avatar_icon = "🎓" if message["role"] == "user" else "🧠"
         with st.chat_message(message["role"], avatar=avatar_icon):
             st.markdown(message["content"])
 
+    # Captura de nueva consulta desde el cuadro inferior
     if prompt := st.chat_input("Escribe tu duda aquí..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         ejecutar_rerun()
 
+    # Procesar la respuesta del asistente si el último mensaje guardado pertenece al alumno
     if st.session_state.messages and st.session_state.messages[-1]["role"] == "user":
         prompt_actual = st.session_state.messages[-1]["content"]
             
@@ -211,9 +327,11 @@ if rol_seleccionado == "Estudiante 🎓":
                         rol_ctx = "Estudiante" if msg["role"] == "user" else "Psicobot"
                         historial_contexto += f"{rol_ctx}: {msg['content']}\n"
                     
-                    fecha_actual_sistema = datetime.date.today().strftime("%A, %d de %B de %Y")
+                    hoy = datetime.date.today()
+                    fecha_actual_sistema = hoy.strftime("%A, %d de %B de %Y")
                     
-                    model = genai.GenerativeModel(model_name='models/gemini-2.5-flash')
+                    nombre_modelo_oficial = 'models/gemini-2.5-flash'
+                    model = genai.GenerativeModel(model_name=nombre_modelo_oficial)
                     
                     full_prompt = (
                         f"{instrucciones_base}\n\n"
@@ -230,23 +348,26 @@ if rol_seleccionado == "Estudiante 🎓":
                         st.markdown(respuesta_texto)
                         st.session_state.messages.append({"role": "assistant", "content": respuesta_texto})
                         
+                        # Guardar logs de analíticas de forma desatendida
                         es_vacio = "❌ No dispongo de ese registro" in respuesta_texto
                         registrar_log(prompt_actual, respuesta_texto, no_registro=es_vacio)
                         ejecutar_rerun()
                     else:
-                        st.warning("⚠️ El asistente no devolvió una respuesta válida.")
+                        st.warning("⚠️ El asistente no devolvió una respuesta válida. Intenta de nuevo.")
                         
                 except Exception as e:
                     st.error(f"⚠️ Error del sistema: {e}")
 
-    # --- FEEDBACK ---
+    # --- SISTEMA DINÁMICO DE FEEDBACK BLINDADO (EVITA CONFLICTOS DE ESTADO) ---
     if st.session_state.messages and st.session_state.messages[-1]["role"] == "assistant":
         ultimo_msg = st.session_state.messages[-1]
         st.write("---")
+        
         if "feedback_enviado" not in ultimo_msg:
             st.caption("¿Te fue útil esta respuesta?")
             col_feed1, col_feed2, _ = st.columns([1, 1, 8])
             id_llave = len(st.session_state.messages)
+            
             with col_feed1:
                 if st.button("👍 Sí", key=f"feed_si_{id_llave}"):
                     actualizar_ultimo_feedback("Útil (Positivo)")
@@ -258,32 +379,57 @@ if rol_seleccionado == "Estudiante 🎓":
                     ultimo_msg["feedback_enviado"] = "negativo"
                     ejecutar_rerun()
         else:
-            if ultimo_msg["feedback_enviado"] == "positivo": st.success("¡Gracias por tu feedback! (👍 Valoración Positiva Guardada)")
-            else: st.error("Registrado. Trabajaremos en mejorarlo. (👎 Valoración Negativa Guardada)")
+            if ultimo_msg["feedback_enviado"] == "positivo":
+                st.success("¡Gracias por tu feedback! (👍 Valoración Positiva Guardada)")
+            else:
+                st.error("Registrado. Trabajaremos en mejorarlo. (👎 Valoración Negativa Guardada)")
 
-# --- VISTA DE ADMINISTRACIÓN ---
+# --- VISTA DE ADMINISTRACIÓN (ESCUELA) ---
 elif rol_seleccionado == "Escuela (Admin) 🔑":
     st.markdown("<h1 style='color:#cc609b;'>📊 Panel de Analíticas Institucionales</h1>", unsafe_allow_html=True)
+    st.markdown("Clave de acceso de prueba: `psico2026`")
+    
     password = st.text_input("Introduce la contraseña de acceso:", type="password")
     if password == "psico2026":
         st.success("Acceso Autorizado.")
         st.markdown("---")
-        with st.expander("📂 Estado del Repositorio (Archivos Activos)"):
-            if archivos_activos:
-                for arc in archivos_activos: st.write(arc)
-            else: st.warning("No hay documentos.")
-                
+        
         if os.path.exists(LOG_FILE):
             try:
                 df_logs = pd.read_csv(LOG_FILE, encoding='utf-8')
+                
+                # 1. Métricas clave (KPIs)
+                total_consultas = len(df_logs)
+                vacios_info = len(df_logs[df_logs["Vacio_Informacion"] == "SÍ"])
+                feedback_positivo = len(df_logs[df_logs["Feedback"] == "Útil (Positivo)"])
+                
                 kpi1, kpi2, kpi3 = st.columns(3)
-                with kpi1: st.metric("Total Consultas", len(df_logs))
-                with kpi2: st.metric("⚠️ Alertas de Vacíos", len(df_logs[df_logs["Vacio_Informacion"] == "SÍ"]))
-                with kpi3: st.metric("Valoraciones Positivas (👍)", len(df_logs[df_logs["Feedback"] == "Útil (Positivo)"]))
+                with kpi1:
+                    st.metric(label="Total Consultas Alumnos", value=total_consultas)
+                with kpi2:
+                    st.metric(label="⚠️ Alertas de Vacíos de Información", value=vacios_info, delta="Acción requerida" if vacios_info > 0 else "Todo cubierto")
+                    st.caption("Frecuencia con la que el bot activó la regla 'No dispongo de ese registro'.")
+                with kpi3:
+                    st.metric(label="Valoraciones Positivas (👍)", value=feedback_positivo)
+                
                 st.markdown("---")
-                st.markdown("### 📋 Historial Completo")
-                # Corrección de use_container_width a width='stretch'
-                st.dataframe(df_logs, width="stretch")
-            except Exception: pass
-        else: st.info("Aún no se registran interacciones.")
-    elif password != "": st.error("Contraseña incorrecta.")
+                
+                # 2. Gráficos de tendencias temporales
+                st.markdown("### 📈 Volumen Diario de Consultas")
+                if "Fecha" in df_logs.columns and not df_logs.empty:
+                    conteo_fechas = df_logs["Fecha"].value_counts().sort_index()
+                    st.bar_chart(conteo_fechas)
+                
+                st.markdown("---")
+                
+                # 3. Registro bruto de auditoría
+                st.markdown("### 📋 Historial Completo de Interacciones")
+                st.dataframe(df_logs, use_container_width=True)
+            except Exception as ex_panel:
+                st.error(f"Error temporal al leer el archivo de analíticas: {ex_panel}")
+            
+        else:
+            st.info("Aún no se registran interacciones en los logs para mostrar analíticas.")
+            
+    elif password != "":
+        st.error("Contraseña incorrecta. Inténtalo nuevamente.")
