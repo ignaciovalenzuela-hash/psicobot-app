@@ -5,6 +5,7 @@ import pandas as pd  # Para el Excel y analíticas
 import os
 import unicodedata
 import datetime  # Mantiene la noción del tiempo real
+import base64 # NUEVO: Para procesar el video en la interfaz
 
 # --- 1. CONFIGURACIÓN DE PÁGINA Y ESTILOS VISUALES PERSONALIZADOS (CSS) ---
 st.set_page_config(
@@ -13,12 +14,10 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
 st.markdown("""
 <style>
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-
     .titulo-psicobot {
         background: linear-gradient(45deg, #cc609b, #ff89c9);
         -webkit-background-clip: text;
@@ -28,7 +27,6 @@ st.markdown("""
         font-size: 3.2rem;
         margin-bottom: 0rem;
     }
-
     .online-indicator {
         display: flex;
         justify-content: center;
@@ -53,7 +51,6 @@ st.markdown("""
         70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(255, 137, 201, 0); }
         100% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 137, 201, 0); }
     }
-
     .welcome-card {
         background-color: #ffffff;
         border-left: 5px solid #cc609b;
@@ -135,17 +132,24 @@ def convertir_df_a_markdown(df):
         md += "|" + "|".join(valores) + "|\n"
     return md
 
-# --- 2. CARGA AUTOMÁTICA DE DOCUMENTOS ---
-@st.cache_resource(show_spinner=False)
-def cargar_documentos():
+
+# --- 2. CARGA AUTOMÁTICA DE DOCUMENTOS (ACTUALIZADA PARA CACHÉ DINÁMICO) ---
+def obtener_lista_archivos():
+    """Genera una tupla con los archivos del directorio para invalidar caché si hay cambios."""
+    return tuple(sorted(os.listdir()))
+
+@st.cache_data(show_spinner=False)
+def cargar_documentos(lista_archivos):
     texto_total = ""
     archivos_procesados = []
     
-    for a in os.listdir():
-        if a.endswith(('.xlsx', '.xls', '.csv')):
+    for a in lista_archivos:
+        # Forzar lectura en minúscula para evitar que ignore ".PDF"
+        a_lower = a.lower()
+        if a_lower.endswith(('.xlsx', '.xls', '.csv')):
             df = None
             try:
-                df = pd.read_csv(a, encoding='utf-8') if a.endswith('.csv') else pd.read_excel(a)
+                df = pd.read_csv(a, encoding='utf-8') if a_lower.endswith('.csv') else pd.read_excel(a)
             except:
                 try: df = pd.read_csv(a, encoding='latin-1')
                 except: continue
@@ -159,7 +163,7 @@ def cargar_documentos():
                 texto_total += convertir_df_a_markdown(df)
                 texto_total += f"\n--- FIN DE LA TABLA {a} ---\n\n"
                 
-        elif a.endswith('.pdf'):
+        elif a_lower.endswith('.pdf'):
             try:
                 texto_total += f"\n\n=========================================\n"
                 texto_total += f"📄 DOCUMENTO REPOSITORIO: {a}\n"
@@ -177,7 +181,9 @@ def cargar_documentos():
             
     return texto_total, archivos_procesados
 
-contexto_facultad, archivos_activos = cargar_documentos()
+# Ahora al inyectar la función, Streamlit vigilará el directorio
+contexto_facultad, archivos_activos = cargar_documentos(obtener_lista_archivos())
+
 
 # --- 3. CONFIGURACIÓN DE INSTRUCCIONES BASE ---
 instrucciones_base = (
@@ -186,7 +192,6 @@ instrucciones_base = (
     
     "🛑 REGLA DE BREVEDAD Y CONCISIÓN EXTREMA:\n"
     "- Está ESTRICTAMENTE PROHIBIDO entregar respuestas extensas, detalladas en exceso o con introducciones largas. Ve directo al grano. El exceso de texto confunde al estudiante. Si una respuesta puede darse en un párrafo corto o un par de viñetas breves, hazlo así.\n\n"
-
     "⚠️ REGLA CRÍTICA DE CIERRE: Está ESTRICTAMENTE PROHIBIDO terminar tus respuestas con preguntas de cortesía, de seguimiento o cierres como '¿Necesitas más detalles?', '¿Te puedo ayudar con algo más?' o listas numeradas al final. Termina inmediatamente al entregar la información.\n\n"
     
     "👥 REGLA ESTRICTA DE MODALIDADES, ASISTENCIA Y TOMA DE RAMOS:\n"
@@ -196,31 +201,26 @@ instrucciones_base = (
     "- 📅 REGLA CRÍTICA PARA TOMA DE RAMOS: Al informar las fechas de toma de ramos (inscripción de asignaturas), sé sumamente cuidadoso:\n"
     "  * Para la modalidad **Semipresencial**, existen estrictamente **dos fechas diferentes dependiendo del cohorte** del estudiante. Debes especificar ambas fechas indicando a qué cohorte corresponde cada una, o pedir al estudiante que te indique su cohorte.\n"
     "  * Para las modalidades **Presencial Diurno** y **Presencial Vespertino**, entrega la fecha exacta que corresponda según los documentos oficiales, sin mezclarlas ni confundirlas entre sí.\n\n"
-
     "❄️ REGLA OBLIGATORIA PARA CONGELAMIENTO (RETIRO TEMPORAL):\n"
     "- Cuando un estudiante pregunte por congelamiento, cómo congelar o retiro temporal, debesestructurar la respuesta siguiendo estrictamente este orden jerárquico:\n"
     "  1. **Orientación de Acompañamiento:** Antes de dar los pasos operativos, indícale de forma clara que antes de congelar puede contactarse directamente con la Escuela para revisar diferentes opciones y apoyos personalizados que se le pueden brindar para continuar sus estudios y evitar la suspensión.\n"
     "  2. **Advertencia de Plazos Extratemporales:** Advierte explícitamente sobre los plazos normativos incluyendo exactamente la siguiente frase textual: \"Si presentas la solicitud de retiro temporal fuera de los plazos establecidos, tu carga académica no será eliminada y las evaluaciones realizadas durante el periodo serán consideradas para el cálculo del resultado final de las asignaturas (Art. 43).\"\n"
     "  3. **Procedimiento Operativo:** Entrega los pasos breves para ingresar el requerimiento a través del respectivo portal.\n\n"
-
     "🛑 REGLA DE OMISIÓN DE FUENTES:\n"
     "- Está ESTRICTAMENTE PROHIBIDO agregar de dónde sacaste la información de manera espontánea. No cites nombres de archivos ni pongas referencias de documentos (Ej: NO digas 'según el reglamento' ni '(Art. 23)').\n"
     "- 🚨 EXCEPCIÓN ÚNICA: Se autoriza y exige mostrar el '(Art. 43)' únicamente dentro de la frase literal obligatoria de la regla de congelamiento.\n"
     "- ÚNICAMENTE revelarás otra fuente si el estudiante te lo pregunta de forma explícita (Ej: '¿De qué parte del reglamento sale eso?').\n\n"
-
     "🛑 REGLA ESTRICTA DE FILTRO Y AGRUPACIÓN DE CLASES PRESENCIALES:\n"
     "- Está ESTRICTAMENTE PROHIBIDO entregar el listado completo de la carrera o de todos los semestres al mismo tiempo.\n"
     "- Cuando pregunten por fechas de clases presenciales de su curso, verifica de inmediato que tengas: Modalidad, Semestre y Sección. Si falta alguno, solicítalo directamente.\n"
     "- Al contar con los 3 datos, entrega TODAS las fechas del filtro deduciendo e incluyendo obligatoriamente el día de la semana (Sábado, Domingo, etc.).\n"
     "- ❗ REGLA DE ORO DE DISEÑO: Es OBLIGATORIO agrupar todas las fechas bajo el nombre de su respectiva asignatura. Está terminantemente PROHIBIDO repetir el nombre de la asignatura línea por línea en formato de texto plano.\n\n"
-
     "🛠️ FORMATO OBLIGATORIO PARA HORARIOS FILTRADOS:\n"
     "Debes estructurar la información exactamente con este diseño visual para cada asignatura encontrada:\n"
     "### 📖 [NOMBRE ASIGNATURA]\n"
     "* **Sección:** [X] | **Semestre:** [X]\n"
     "* 📆 [Día de la semana] [Fecha] — ⏰ [Hora Inicio a Fin]\n"
     "* 📆 [Día de la semana] [Fecha] — ⏰ [Hora Inicio a Fin]\n\n"
-
     "📅 REGLA PARA PROYECCIÓN DE MALLA CURRICULAR Y PLANIFICACIÓN ACADÉMICA:\n"
     "- Cuando un estudiante solicite una proyección de su avance o malla, actúa bajo las siguientes directrices usando la base de conocimientos:\n"
     "  1. Identificación del Avance: Solicita su lista de asignaturas aprobadas si aún no la ha entregado.\n"
@@ -232,16 +232,13 @@ instrucciones_base = (
     
     "⚖️ REGLA DE COMPLETITUD EN HORARIOS GENERALES:\n"
     "- Si un alumno pregunta por el horario general de una modalidad (ej. Diurno), entrega la información completa unificada (días de la semana y bloques de hora juntos) en la misma frase para evitar repreguntas.\n\n"
-
     "⚖️ REGLA DE SÍNTESIS PARA REGLAMENTOS:\n"
     "- Al responder sobre reglamentos de la institución, usa un formato ejecutivo directo de máximo 3 o 4 viñetas (bullet points) cortas centrándote en: qué es, qué regula y la sanción/consecuencia principal.\n\n"
-
     "📝 SOLICITUDES Y TRÁMITES CORRIENTES:\n"
     "Ruta breve ante solicitudes académicas generales:\n"
     "1. Ingresa al [Portal de Solicitudes](https://solicitudes.uniacc.cl/login) con tus credenciales de portal.\n"
     "2. Ruta: Requerimiento académico > Subcategoría correspondiente.\n"
     "3. Plazos: Generalmente 48 horas (máximo legal 15 días hábiles).\n\n"
-
     "🔑 PORTALES Y ENLACES OBLIGATORIOS (BLINDAJE DE LINKS):\n"
     "- 🔗 REGLA DE ENLACES ESTRICTOS: Queda terminantemente PROHIBIDO inventar, omitir, truncar o usar URLs distintas a las configuradas a continuación. Cada vez que tu respuesta implique realizar una acción en una plataforma, debes incrustar de forma obligatoria el enlace Markdown hipervinculado con los siguientes destinos exactos de UNIACC:\n"
     "  * Para gestionar trámites, retiros o requerimientos académicos institucionales: [Portal de Solicitudes](https://solicitudes.uniacc.cl/login)\n"
@@ -250,7 +247,6 @@ instrucciones_base = (
     "- Claves: Alumnos nuevos entran con RUT. Alumnos antiguos con su contraseña.\n"
     "- Semipresencial: Notas de ramos en [eCampus](https://ecampus.uniacc.cl); en [Portal Alumno](https://portal.uniacc.cl) solo promedios finales.\n"
     "- Diurno/Vespertino: Revisan directo en [Portal Alumno](https://portal.uniacc.cl).\n\n"
-
     "📌 REGLA DE ORO DE PRECISIÓN:\n"
     "Si un dato específico no está en los documentos tras aplicar los filtros, di: '❌ No dispongo de ese registro específico en mis sistemas.'"
 )
@@ -265,14 +261,23 @@ if "messages" not in st.session_state:
 
 # --- VISTA DE ESTUDIANTE ---
 if rol_seleccionado == "Estudiante 🎓":
-    # Encabezado Principal
+    # Encabezado Principal (ACTUALIZADO PARA VIDEO LOGO)
     col1, col2, col3 = st.columns([1, 1.2, 1])
     with col2:
-        if os.path.exists("logo.png"):
+        if os.path.exists("logo.mp4"):
+            with open("logo.mp4", "rb") as video_file:
+                video_bytes = video_file.read()
+            video_base64 = base64.b64encode(video_bytes).decode("utf-8")
+            st.markdown(f'''
+                <video width="100%" autoplay loop muted playsinline style="border-radius: 8px; pointer-events: none;">
+                    <source src="data:video/mp4;base64,{video_base64}" type="video/mp4">
+                </video>
+            ''', unsafe_allow_html=True)
+        elif os.path.exists("logo.png"):
             st.image("logo.png", width="stretch") 
         else:
             st.caption("🧠 Psicobot en línea")
-
+            
     st.markdown("<h1 class='titulo-psicobot'>Psicobot</h1>", unsafe_allow_html=True)
     st.markdown("<div class='online-indicator'><span class='dot'></span> Asistente Oficial Activo</div>", unsafe_allow_html=True)
     st.markdown("---")
