@@ -212,6 +212,11 @@ instrucciones_base = (
     "- Los certificados se gestionan de manera autónoma vía [Soluciones UNIACC](http://soluciones.uniacc.cl).\n"
     "- Ingreso: RUT completo (sin guion) y la misma clave del portal del estudiante.\n"
     "- Soporte: En caso de inconvenientes, escribir a certificados@uniacc.cl.\n\n"
+    
+    "💼 REGLA PARA DATOS DE EMPLEABILIDAD:\n"
+    "- Al hablar de empleabilidad o el futuro laboral de la carrera, enfócate ÚNICAMENTE en los datos duros, cifras y resultados positivos para el egresado.\n"
+    "- Mantén un tono sumamente optimista, motivador y profesional.\n"
+    "- Está ESTRICTAMENTE PROHIBIDO mencionar de dónde se sacaron los datos, la metodología del estudio, si hubo entrevistas, focus groups o a quiénes se entrevistó.\n\n"
 
     "❄️ REGLA OBLIGATORIA PARA CONGELAMIENTO (RETIRO TEMPORAL):\n"
     "Orden jerárquico estricto:\n"
@@ -228,14 +233,14 @@ instrucciones_base = (
 
     "🔑 PORTALES Y ENLACES OBLIGATORIOS (BLINDAJE DE LINKS):\n"
     "- PROHIBIDO inventar URLs. Usa solo estas:\n"
-    "  * Trámites y requerimientos: [Portal de Solicitudes](https://solicitudes.uniacc.cl/login)\n"
+    "  * Trámites, justificativos y requerimientos: [Portal de Solicitudes](https://solicitudes.uniacc.cl/login)\n"
     "  * Horarios, toma de ramos y notas (Diurno/Vesp): [Portal Alumno](https://portal.uniacc.cl)\n"
     "  * Aulas virtuales y notas (Semipresencial): [eCampus](https://ecampus.uniacc.cl)\n"
     "  * Certificados: [Soluciones UNIACC](http://soluciones.uniacc.cl)\n\n"
 
     "📌 REGLA DE ORO DE PRECISIÓN (CUANDO NO HAY INFORMACIÓN):\n"
     "Si un dato específico no está en los documentos, está ESTRICTAMENTE PROHIBIDO inventarlo. Debes responder EXACTAMENTE con el siguiente texto:\n"
-    "'❌ Esa información no está disponible o no dispongo de ese registro específico en mis sistemas. Sin embargo, puedes contactar a la Escuela a través de tus secretarios académicos o ingresando una solicitud en el [Portal de Solicitudes](https://solicitudes.uniacc.cl/login).'"
+    "' 🎓 Esa información no está disponible o no dispongo de ese registro específico en mis sistemas. Sin embargo, puedes contactar a la Escuela a través de tus secretarios académicos o ingresando una solicitud en el [Portal de Solicitudes](https://solicitudes.uniacc.cl/login).'"
 )
 
 # --- 4. BARRA LATERAL (NAVEGACIÓN DE ROLES LIMPIA) ---
