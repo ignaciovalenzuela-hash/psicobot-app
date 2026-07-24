@@ -494,7 +494,7 @@ def renderizar_termometro():
         
         <div class="widget-termometro" title="Nivel de uso actual: {estado}">
             <div class="termometro-icono">{icono}</div>
-            <div class="termometro-texto">Uso del bot: <span class="termometro-numero">{total_usos}</span> consultas</div>
+            <div class="termometro-texto">: <span class="termometro-numero">{total_usos}</span> </div>
         </div>
         """, unsafe_allow_html=True)
     except Exception as e:
