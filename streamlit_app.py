@@ -461,7 +461,7 @@ def renderizar_termometro():
             .widget-termometro {{
                 position: fixed;
                 bottom: 20px;
-                right: 20px;
+                left: 20px;
                 background-color: #ffffff;
                 padding: 10px 15px;
                 border-radius: 30px;
