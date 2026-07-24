@@ -430,3 +430,75 @@ elif rol_seleccionado == "Escuela (Admin) 🔑":
             
     elif password != "":
         st.error("Contraseña incorrecta. Inténtalo nuevamente.")
+
+# --- 5. TERMÓMETRO DE USO FLOTANTE (ESQUINA INFERIOR DERECHA) ---
+def renderizar_termometro():
+    try:
+        # Leer el total de consultas desde el archivo de logs
+        if os.path.exists(LOG_FILE):
+            df_logs = pd.read_csv(LOG_FILE, encoding='utf-8')
+            total_usos = len(df_logs)
+        else:
+            total_usos = 0
+            
+        # Determinar el color e ícono del termómetro según el volumen de uso
+        if total_usos < 50:
+            color = "#4CAF50" # Verde (Frío/Normal)
+            icono = "🌡️"
+            estado = "Bajo"
+        elif total_usos < 200:
+            color = "#FF9800" # Naranja (Tibio/Activo)
+            icono = "🔥"
+            estado = "Activo"
+        else:
+            color = "#F44336" # Rojo (Caliente/Muy Activo)
+            icono = "🌋"
+            estado = "Alto"
+
+        # Inyectar CSS y HTML para fijar el widget en la esquina
+        st.markdown(f"""
+        <style>
+            .widget-termometro {{
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                background-color: #ffffff;
+                padding: 10px 15px;
+                border-radius: 30px;
+                box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.15);
+                z-index: 9999;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                border: 1px solid #f0f0f0;
+                transition: transform 0.2s ease;
+            }}
+            .widget-termometro:hover {{
+                transform: scale(1.05);
+            }}
+            .termometro-icono {{
+                font-size: 1.3rem;
+            }}
+            .termometro-texto {{
+                font-size: 0.85rem;
+                color: #555;
+                font-weight: 600;
+                font-family: sans-serif;
+                margin: 0;
+            }}
+            .termometro-numero {{
+                color: {color};
+                font-weight: 800;
+            }}
+        </style>
+        
+        <div class="widget-termometro" title="Nivel de uso actual: {estado}">
+            <div class="termometro-icono">{icono}</div>
+            <div class="termometro-texto">Uso del bot: <span class="termometro-numero">{total_usos}</span> consultas</div>
+        </div>
+        """, unsafe_allow_html=True)
+    except Exception as e:
+        pass # Si hay error al leer el archivo, simplemente no muestra el widget
+
+# Llamar a la función para que se muestre en todas las pantallas
+renderizar_termometro()
