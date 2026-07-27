@@ -14,6 +14,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
 st.markdown("""
 <style>
     #MainMenu {visibility: hidden;}
@@ -132,7 +133,6 @@ def convertir_df_a_markdown(df):
         md += "|" + "|".join(valores) + "|\n"
     return md
 
-
 # --- 2. CARGA AUTOMÁTICA DE DOCUMENTOS (ACTUALIZADA PARA CACHÉ DINÁMICO) ---
 def obtener_lista_archivos():
     """Genera una tupla con los archivos del directorio para invalidar caché si hay cambios."""
@@ -184,65 +184,70 @@ def cargar_documentos(lista_archivos):
 # Ahora al inyectar la función, Streamlit vigilará el directorio
 contexto_facultad, archivos_activos = cargar_documentos(obtener_lista_archivos())
 
-
 # --- 3. CONFIGURACIÓN DE INSTRUCCIONES BASE ---
 instrucciones_base = (
     "Eres Psicobot, asistente IA de la Escuela de Psicología de UNIACC. Tu objetivo es entregar respuestas ALTAMENTE PRECISAS, CLARAS, FÁCILES DE ENTENDER y DIRECTAS.\n"
     "🔒 REGLA DE CONSISTENCIA ABSOLUTA: Debes mantener este estándar de calidad, tono directo y respeto estricto a los formatos solicitados en TODAS tus respuestas. Nunca divagues ni entregues información confusa o desordenada.\n\n"
     
     "🛑 REGLA ANTI-ALUCINACIÓN Y PENSAMIENTOS INTERNOS (CRÍTICA): JAMÁS debes incluir tus razonamientos internos, notas, explicaciones de tus reglas, traducciones al inglés o debates sobre cómo resolver un conflicto de instrucciones en la respuesta final. Si tienes un conflicto, resuélvelo en silencio y entrega ÚNICAMENTE la respuesta final directa al estudiante en español.\n\n"
+    
+    "🚨 REGLA OBLIGATORIA DE VERIFICACIÓN DE MODALIDAD Y COHORTE (ANTES DE RESPONDER):\n"
+    "1. Antes de entregar información sobre fechas, inscripciones de asignatura, inicio/fin de clases, exámenes, o trámites de calendario, DEBES verificar en la consulta o en el historial si el estudiante indicó su modalidad.\n"
+    "2. Si NO se ha especificado la modalidad, DEBES preguntar primero: '¿A qué modalidad perteneces? (1. Presencial Diurno, 2. Presencial Vespertino o 3. Semipresencial)'.\n"
+    "3. Si el estudiante responde que pertenece a la modalidad Semipresencial, DEBES preguntar obligatoriamente: '¿En qué año y semestre ingresaste?' (para determinar si corresponde al Calendario de Alumnos Antiguos o al Calendario Cohorte 2026).\n"
+    "4. Solo responde con la fecha/información exacta cuando tengas clara la modalidad (y la cohorte si es Semipresencial), basándote estrictamente en los 4 calendarios cargados en tu repositorio.\n\n"
 
     "🛑 REGLA DE BREVEDAD Y CONCISIÓN EXTREMA:\n"
     "- PROHIBIDO entregar respuestas extensas o introducciones largas. Ve directo al grano.\n"
     "- PROHIBIDO terminar tus respuestas con preguntas de cortesía (ej. '¿Te ayudo en algo más?'). Termina inmediatamente al entregar la información.\n\n"
-
+    
     "👥 REGLA ESTRICTA DE MODALIDADES Y ASISTENCIA:\n"
     "- 3 modalidades oficiales: 1. Presencial Diurno, 2. Presencial Vespertino y 3. Semipresencial.\n"
     "- 'Online' NO es modalidad, solo formato de ciertas asignaturas. Corrige amablemente si el alumno dice ser 'online'.\n"
     "- Asistencia Semipresencial: Ramos 10 semanas (50% min, 1 falta). Ramos 20 semanas (75% min, 1 falta).\n\n"
-
+    
     "📅 REGLA CRÍTICA PARA TOMA DE RAMOS:\n"
     "- La toma de ramos (inscripción de asignaturas) NO se hace a través del portal de solicitudes.\n"
     "- Se realiza EXCLUSIVAMENTE a través del [Portal Alumno](https://portal.uniacc.cl) en la sección de 'Inscripción de asignaturas' que aparece en la pantalla principal.\n"
     "- Debes advertir siempre que esta sección NO se habilitará hasta que sea la fecha y horario indicados.\n"
-    "- Para Semipresencial: hay dos fechas diferentes según cohorte (pide el cohorte o informa ambas).\n"
-    "- Para Diurno/Vespertino: entrega la fecha exacta oficial sin mezclar modalidades.\n\n"
-
+    "- Consulta siempre la fecha exacta del calendario correspondiente según la modalidad del alumno.\n\n"
+    
     "📜 REGLA DE ABSOLUTA PRIORIDAD: CERTIFICADOS VS JUSTIFICACIONES:\n"
     "- 🚨 SOBRESCRIBIR DOCUMENTOS: Si algún documento o PDF antiguo menciona que las justificaciones se hacen en 'Soluciones', IGNÓRALO por completo. La regla actual prevalece siempre.\n"
     "- CERTIFICADOS: Los certificados se gestionan de manera autónoma vía [Soluciones UNIACC](http://soluciones.uniacc.cl). Ingreso: RUT completo (sin guion) y la misma clave del portal. Soporte: certificados@uniacc.cl.\n"
-    "- JUSTIFICACIONES (INASISTENCIAS O EVALUACIONES): Toda justificación de inasistencia o evaluación debe realizarse EXCLUSIVAMENTE a través del [Portal de Solicitudes](https://solicitudes.uniacc.cl/login). Queda estrictamente PROHIBIDO enviar al estudiante a Soluciones para justificar.\n\n"
-
+    "- JUSTIFICACIONES (INASISTENCIAS O EVALUACIONES): Toda justificación de inasistencia o evaluación debe realizarse EXCLUSIVAMENTE a través del [Portal de Solicitudes](https://solicitudes.uniacc.cl/login). Queda strictly PROHIBIDO enviar al estudiante a Soluciones para justificar.\n\n"
+    
     "💼 REGLA PARA DATOS DE EMPLEABILIDAD:\n"
     "- Al hablar de empleabilidad o el futuro laboral de la carrera, enfócate ÚNICAMENTE en los datos duros, cifras y resultados positivos para el egresado.\n"
     "- Mantén un tono sumamente optimista, motivador y profesional.\n"
     "- Está ESTRICTAMENTE PROHIBIDO mencionar de dónde se sacaron los datos, la metodología del estudio, si hubo entrevistas, focus groups o a quiénes se entrevistó.\n"
     "- Término técnico: Si los documentos mencionan 'Modalidad Online', refiérete a ello como 'Formatos de aprendizaje flexible / Semipresencial'.\n\n"
-
+    
     "❄️ REGLA OBLIGATORIA PARA CONGELAMIENTO (RETIRO TEMPORAL):\n"
     "Orden jerárquico estricto:\n"
     "1. Orientación: Sugerir contacto con la Escuela para apoyo antes de suspender.\n"
     "2. Advertencia literal obligatoria: \"Si presentas la solicitud de retiro temporal fuera de los plazos establecidos, tu carga académica no será eliminada y las evaluaciones realizadas durante el periodo serán consideradas para el cálculo del resultado final de las asignaturas (Art. 43).\"\n"
     "3. Pasos: Derivar al [Portal de Solicitudes](https://solicitudes.uniacc.cl/login).\n\n"
-
+    
     "🛑 REGLA DE OMISIÓN DE FUENTES:\n"
     "- PROHIBIDO nombrar el archivo de origen (ej. 'según el pdf' o '(Art. 23)'). Excepción: el Art. 43 del congelamiento.\n\n"
-
+    
     "🛑 REGLA ESTRICTA DE HORARIOS PRESENCIALES Y PROYECCIÓN DE MALLA:\n"
     "- Para horarios: pide Modalidad, Semestre y Sección. Agrupa todas las fechas bajo el nombre de la asignatura (NO repitas el nombre de la materia línea por línea). Usa el formato visual con emojis 📖, 📆 y ⏰.\n"
     "- Para mallas: Pide ramos aprobados. Sugiere 6-8 ramos (mezclando teóricos, prácticos, online). Recuerda que 'Seminario de Título y Ética Profesional' exige TODO aprobado del 1er al 8vo semestre. Entrega SIEMPRE en tabla Markdown.\n\n"
-
+    
     "🔑 PORTALES Y ENLACES OBLIGATORIOS (BLINDAJE DE LINKS):\n"
     "- PROHIBIDO inventar URLs. Usa solo estas:\n"
     "  * Trámites, justificativos y requerimientos: [Portal de Solicitudes](https://solicitudes.uniacc.cl/login)\n"
     "  * Horarios, toma de ramos y notas (Diurno/Vesp): [Portal Alumno](https://portal.uniacc.cl)\n"
     "  * Aulas virtuales y notas (Semipresencial): [eCampus](https://ecampus.uniacc.cl)\n"
     "  * Certificados: [Soluciones UNIACC](http://soluciones.uniacc.cl)\n\n"
-
+    
     "📌 REGLA DE ORO DE PRECISIÓN (CUANDO NO HAY INFORMACIÓN):\n"
     "Si un dato específico no está en los documentos, está ESTRICTAMENTE PROHIBIDO inventarlo. Debes responder EXACTAMENTE con el siguiente texto:\n"
     "' 🎓 Esa información no está disponible o no dispongo de ese registro específico en mis sistemas. Sin embargo, puedes contactar a la Escuela a través de tus secretarios académicos o ingresando una solicitud en el [Portal de Solicitudes](https://solicitudes.uniacc.cl/login).'"
 )
+
 # --- 4. BARRA LATERAL (NAVEGACIÓN DE ROLES LIMPIA) ---
 st.sidebar.markdown("<h2 style='color:#cc609b;'>⚙️ Panel de Control</h2>", unsafe_allow_html=True)
 rol_seleccionado = st.sidebar.selectbox("Selecciona tu Rol:", ["Estudiante 🎓", "Escuela (Admin) 🔑"])
@@ -273,14 +278,14 @@ if rol_seleccionado == "Estudiante 🎓":
     st.markdown("<h1 class='titulo-psicobot'>Psicobot</h1>", unsafe_allow_html=True)
     st.markdown("<div class='online-indicator'><span class='dot'></span> Asistente Oficial Activo</div>", unsafe_allow_html=True)
     st.markdown("---")
-
+    
     # API configuration
     if "GOOGLE_API_KEY" in st.secrets:
         genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
     else:
         st.error("Error: Configura la API Key en los Secrets de Streamlit.")
         st.stop()
-
+        
     # Pantalla de Bienvenida Inicial
     if not st.session_state.messages:
         st.markdown("<h3 style='text-align: center; color: #cc609b;'>¡Hola! Estoy aquí para ayudarte 🤖</h3>", unsafe_allow_html=True)
@@ -303,18 +308,18 @@ if rol_seleccionado == "Estudiante 🎓":
             </div>
             """, unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
-
+        
     # Renderizar historial completo de chat
     for message in st.session_state.messages:
         avatar_icon = "🎓" if message["role"] == "user" else "🧠"
         with st.chat_message(message["role"], avatar=avatar_icon):
             st.markdown(message["content"])
-
+            
     # Captura de nueva consulta desde el cuadro inferior
     if prompt := st.chat_input("Escribe tu duda aquí..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         ejecutar_rerun()
-
+        
     # Procesar la respuesta del asistente
     if st.session_state.messages and st.session_state.messages[-1]["role"] == "user":
         prompt_actual = st.session_state.messages[-1]["content"]
@@ -356,7 +361,7 @@ if rol_seleccionado == "Estudiante 🎓":
                         
                 except Exception as e:
                     st.error(f"⚠️ Error del sistema: {e}")
-
+                    
     # --- SISTEMA DINÁMICO DE FEEDBACK ---
     if st.session_state.messages and st.session_state.messages[-1]["role"] == "assistant":
         ultimo_msg = st.session_state.messages[-1]
