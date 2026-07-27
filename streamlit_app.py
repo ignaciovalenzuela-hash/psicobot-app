@@ -14,7 +14,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
 st.markdown("""
 <style>
     #MainMenu {visibility: hidden;}
@@ -89,7 +88,6 @@ def ejecutar_rerun():
 
 # --- SISTEMA DE LOGS Y ANALÍTICAS GENERALES ---
 LOG_FILE = "psicobot_logs.csv"
-
 def registrar_log(pregunta, respuesta, no_registro=False):
     try:
         fecha_actual = datetime.datetime.now().strftime("%Y-%m-%d")
@@ -194,9 +192,13 @@ instrucciones_base = (
     "🚨 REGLA OBLIGATORIA DE VERIFICACIÓN DE MODALIDAD Y COHORTE (ANTES DE RESPONDER):\n"
     "1. Antes de entregar información sobre fechas, inscripciones de asignatura, inicio/fin de clases, exámenes, o trámites de calendario, DEBES verificar en la consulta o en el historial si el estudiante indicó su modalidad.\n"
     "2. Si NO se ha especificado la modalidad, DEBES preguntar primero: '¿A qué modalidad perteneces? (1. Presencial Diurno, 2. Presencial Vespertino o 3. Semipresencial)'.\n"
-    "3. Si el estudiante responde que pertenece a la modalidad Semipresencial, DEBES preguntar obligatoriamente: '¿En qué año y semestre ingresaste?' (para determinar si corresponde al Calendario de Alumnos Antiguos o al Calendario Cohorte 2026).\n"
-    "4. Solo responde con la fecha/información exacta cuando tengas clara la modalidad (y la cohorte si es Semipresencial), basándote estrictamente en los 4 calendarios cargados en tu repositorio.\n\n"
-
+    "3. Si el estudiante responde que pertenece a la modalidad Semipresencial, DEBES preguntar obligatoriamente: '¿En qué año y semestre ingresaste?' (para determinar a qué calendario de Semipresencial corresponde).\n"
+    "4. Solo responde con la fecha/información exacta cuando tengas clara la modalidad (y la cohorte si es Semipresencial), basándote estrictamente en los 4 calendarios cargados en tu repositorio según las siguientes reglas:\n"
+    "   - Si el estudiante indica que es de modalidad DIURNO, debes basarte EXCLUSIVAMENTE en el documento 'Calendario Académcio Pregado Diurno Estudiantes 2026.pdf'.\n"
+    "   - Si el estudiante señala que es de modalidad VESPERTINA, debes basarte EXCLUSIVAMENTE en el documento 'Calendario Académico Pregrado Vespertino Estudiantes 2026.pdf'.\n"
+    "   - Si el estudiante es SEMIPRESENCIAL y señala que ingresó del segundo semestre del 2026 hacia atrás, debes basarte EXCLUSIVAMENTE en el documento 'Calendario Académico Pregado Semipresencial Antiguos 2026.pdf'.\n"
+    "   - Si el estudiante es SEMIPRESENCIAL y señala que ingresó el 2026, debes basarte EXCLUSIVAMENTE en el documento 'Calendario Académico Semipresencial Cohorte 2026.pdf'.\n\n"
+    
     "🛑 REGLA DE BREVEDAD Y CONCISIÓN EXTREMA:\n"
     "- PROHIBIDO entregar respuestas extensas o introducciones largas. Ve directo al grano.\n"
     "- PROHIBIDO terminar tus respuestas con preguntas de cortesía (ej. '¿Te ayudo en algo más?'). Termina inmediatamente al entregar la información.\n\n"
