@@ -131,9 +131,8 @@ def convertir_df_a_markdown(df):
         md += "|" + "|".join(valores) + "|\n"
     return md
 
-# --- 2. CARGA AUTOMÁTICA DE DOCUMENTOS (ACTUALIZADA PARA CACHÉ DINÁMICO) ---
+# --- 2. CARGA AUTOMÁTICA DE DOCUMENTOS (CON LECTURA MEJORADA DE TABLAS) ---
 def obtener_lista_archivos():
-    """Genera una tupla con los archivos del directorio para invalidar caché si hay cambios."""
     return tuple(sorted(os.listdir()))
 
 @st.cache_data(show_spinner=False)
@@ -168,7 +167,12 @@ def cargar_documentos(lista_archivos):
                 
                 lector_pdf = pypdf.PdfReader(a)
                 for pagina in lector_pdf.pages:
-                    texto_pagina = pagina.extract_text()
+                    # Intenta extraer respetando la disposición visual de las tablas
+                    try:
+                        texto_pagina = pagina.extract_text(extraction_mode="layout")
+                    except Exception:
+                        texto_pagina = pagina.extract_text()
+                        
                     if texto_pagina:
                         texto_total += texto_pagina + "\n"
                         
@@ -186,6 +190,11 @@ instrucciones_base = (
     "🔒 REGLA DE CONSISTENCIA ABSOLUTA: Debes mantener este estándar de calidad, tono directo y respeto estricto a los formatos solicitados en TODAS tus respuestas. Nunca divagues ni entregues información confusa o desordenada.\n\n"
     
     "🛑 REGLA ANTI-ALUCINACIÓN Y PENSAMIENTOS INTERNOS (CRÍTICA): JAMÁS debes incluir tus razonamientos internos, notas, explicaciones de tus reglas, traducciones al inglés o debates sobre cómo resolver un conflicto de instrucciones en la respuesta final. Si tienes un conflicto, resuélvelo en silencio y entrega ÚNICAMENTE la respuesta final directa al estudiante en español.\n\n"
+    
+    "🗓️ REGLA CRÍTICA DE EXTRACTION LITERAL DE FECHAS DE CALENDARIO:\n"
+    "1. Queda ESTRICTAMENTE PROHIBIDO inventar, deducir, extrapolar o calcular fechas, días de la semana o rangos que no estén escritos de forma LITERAL y EXPLICITA en el texto del repositorio.\n"
+    "2. Copia exactamente los días, fechas y meses tal como aparecen en el texto del documento asignado a la modalidad.\n"
+    "3. Si el texto del calendario se encuentra confuso o la fecha solicitada no figura expresamente en el repositorio, ACTIVA INMEDIATAMENTE LA 'REGLA DE ORO DE PRECISIÓN' (indica que la información no está disponible).\n\n"
     
     "🚨 REGLA OBLIGATORIA DE VERIFICACIÓN DE MODALIDAD Y COHORTE (ANTES DE RESPONDER):\n"
     "1. Antes de entregar información sobre fechas, inscripciones de asignatura, inicio/fin de clases, exámenes, o trámites de calendario, DEBES verificar en la consulta o en el historial si el estudiante indicó su modalidad.\n"
@@ -344,10 +353,10 @@ if rol_seleccionado == "Estudiante 🎓":
                     
                     full_prompt = (
                         f"{instrucciones_base}\n\n"
-                        f"⏰ FECHA: {fecha_actual_sistema}\n\n"
-                        f"REPOSITORIO:\n{contexto_facultad}\n\n"
-                        f"HISTORIAL:\n{historial_contexto}\n"
-                        f"ESTUDIANTE: {prompt_actual}"
+                        f"⏰ FECHA ACTUAL DEL SISTEMA: {fecha_actual_sistema}\n\n"
+                        f"REPOSITORIO DE DOCUMENTOS OFICIALES:\n{contexto_facultad}\n\n"
+                        f"HISTORIAL RECIENTE:\n{historial_contexto}\n"
+                        f"PREGUNTA DEL ESTUDIANTE: {prompt_actual}"
                     )
                     
                     # --- SELECCIÓN DINÁMICA CON FALLBACK DE MODELOS ---
@@ -363,7 +372,10 @@ if rol_seleccionado == "Estudiante 🎓":
                     for nombre_modelo in modelos_candidatos:
                         try:
                             m = genai.GenerativeModel(model_name=nombre_modelo)
-                            response = m.generate_content(full_prompt, generation_config={"temperature": 0.1})
+                            response = m.generate_content(
+                                full_prompt, 
+                                generation_config={"temperature": 0.0} # Temperatura 0.0 para cero alucinación
+                            )
                             if response and hasattr(response, 'text') and response.text:
                                 break
                         except Exception:
