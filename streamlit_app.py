@@ -5,7 +5,7 @@ import pandas as pd  # Para el Excel y analíticas
 import os
 import unicodedata
 import datetime  # Mantiene la noción del tiempo real
-import base64 # NUEVO: Para procesar el video en la interfaz
+import base64 # NUEVO: Para procesar el video en la interfaz 
 
 # --- 1. CONFIGURACIÓN DE PÁGINA Y ESTILOS VISUALES PERSONALIZADOS (CSS) ---
 st.set_page_config(
