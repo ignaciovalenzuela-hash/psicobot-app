@@ -5,7 +5,7 @@ import pandas as pd  # Para el Excel y analíticas
 import os
 import unicodedata
 import datetime  # Mantiene la noción del tiempo real
-import base64 # NUEVO: Para procesar el video en la interfaz 
+import base64 # Para procesar el video en la interfaz 
 
 # --- 1. CONFIGURACIÓN DE PÁGINA Y ESTILOS VISUALES PERSONALIZADOS (CSS) ---
 st.set_page_config(
@@ -142,7 +142,6 @@ def cargar_documentos(lista_archivos):
     archivos_procesados = []
     
     for a in lista_archivos:
-        # Forzar lectura en minúscula para evitar que ignore ".PDF"
         a_lower = a.lower()
         if a_lower.endswith(('.xlsx', '.xls', '.csv')):
             df = None
@@ -179,7 +178,6 @@ def cargar_documentos(lista_archivos):
             
     return texto_total, archivos_procesados
 
-# Ahora al inyectar la función, Streamlit vigilará el directorio
 contexto_facultad, archivos_activos = cargar_documentos(obtener_lista_archivos())
 
 # --- 3. CONFIGURACIÓN DE INSTRUCCIONES BASE ---
@@ -193,12 +191,19 @@ instrucciones_base = (
     "1. Antes de entregar información sobre fechas, inscripciones de asignatura, inicio/fin de clases, exámenes, o trámites de calendario, DEBES verificar en la consulta o en el historial si el estudiante indicó su modalidad.\n"
     "2. Si NO se ha especificado la modalidad, DEBES preguntar primero: '¿A qué modalidad perteneces? (1. Presencial Diurno, 2. Presencial Vespertino o 3. Semipresencial)'.\n"
     "3. Si el estudiante responde que pertenece a la modalidad Semipresencial, DEBES preguntar obligatoriamente: '¿En qué año y semestre ingresaste?' (para determinar a qué calendario de Semipresencial corresponde).\n"
-    "4. Solo responde con la fecha/información exacta cuando tengas clara la modalidad (y la cohorte si es Semipresencial), basándote estrictamente en los 4 calendarios cargados en tu repositorio según las siguientes reglas:\n"
+    "4. Solo responde con la fecha/información exacta cuando tengas clara la modalidad (y la cohorte si es Semipresencial), basándote strictly en los 4 calendarios cargados en tu repositorio según las siguientes reglas:\n"
     "   - Si el estudiante indica que es de modalidad DIURNO, debes basarte EXCLUSIVAMENTE en el documento 'Calendario Académcio Pregado Diurno Estudiantes 2026.pdf'.\n"
     "   - Si el estudiante señala que es de modalidad VESPERTINA, debes basarte EXCLUSIVAMENTE en el documento 'Calendario Académico Pregrado Vespertino Estudiantes 2026.pdf'.\n"
     "   - Si el estudiante es SEMIPRESENCIAL y señala que ingresó del segundo semestre del 2026 hacia atrás, debes basarte EXCLUSIVAMENTE en el documento 'Calendario Académico Pregado Semipresencial Antiguos 2026.pdf'.\n"
     "   - Si el estudiante es SEMIPRESENCIAL y señala que ingresó el 2026, debes basarte EXCLUSIVAMENTE en el documento 'Calendario Académico Semipresencial Cohorte 2026.pdf'.\n\n"
     
+    "🔄 REGLA PARA SOLICITUDES DE CAMBIO DE MODALIDAD:\n"
+    "Si un estudiante consulta sobre cómo cambiarse de modalidad o realizar un trámite similar, DEBES responder de forma estructurada, profesional y clara indicando exactamente lo siguiente:\n"
+    "1. Toda solicitud de cambio de modalidad se debe ingresar exclusivamente a través del [Portal de Solicitudes](https://solicitudes.uniacc.cl/login).\n"
+    "2. La solicitud debe realizarse bajo la **Categoría: Requerimiento académico** y **Subcategoría: Cambio de modalidad**.\n"
+    "3. Es un requisito obligatorio que en el detalle de la solicitud se especifique claramente a qué modalidad se desea realizar el cambio.\n"
+    "4. Es de suma importancia que el o la estudiante ingrese la solicitud únicamente una vez que haya finalizado su semestre académico o se hayan cerrado formalmente todas sus asignaturas.\n\n"
+
     "🛑 REGLA DE BREVEDAD Y CONCISIÓN EXTREMA:\n"
     "- PROHIBIDO entregar respuestas extensas o introducciones largas. Ve directo al grano.\n"
     "- PROHIBIDO terminar tus respuestas con preguntas de cortesía (ej. '¿Te ayudo en algo más?'). Termina inmediatamente al entregar la información.\n\n"
@@ -217,7 +222,7 @@ instrucciones_base = (
     "📜 REGLA DE ABSOLUTA PRIORIDAD: CERTIFICADOS VS JUSTIFICACIONES:\n"
     "- 🚨 SOBRESCRIBIR DOCUMENTOS: Si algún documento o PDF antiguo menciona que las justificaciones se hacen en 'Soluciones', IGNÓRALO por completo. La regla actual prevalece siempre.\n"
     "- CERTIFICADOS: Los certificados se gestionan de manera autónoma vía [Soluciones UNIACC](http://soluciones.uniacc.cl). Ingreso: RUT completo (sin guion) y la misma clave del portal. Soporte: certificados@uniacc.cl.\n"
-    "- JUSTIFICACIONES (INASISTENCIAS O EVALUACIONES): Toda justificación de inasistencia o evaluación debe realizarse EXCLUSIVAMENTE a través del [Portal de Solicitudes](https://solicitudes.uniacc.cl/login). Queda strictly PROHIBIDO enviar al estudiante a Soluciones para justificar.\n\n"
+    "- JUSTIFICACIONES (INASISTENCIAS O EVALUACIONES): Toda justificación de inasistencia o evaluación debe realizarse EXCLUSIVAMENTE a través del [Portal de Solicitudes](https://solicitudes.uniacc.cl/login). Queda estrictamente PROHIBIDO enviar al estudiante a Soluciones para justificar.\n\n"
     
     "💼 REGLA PARA DATOS DE EMPLEABILIDAD:\n"
     "- Al hablar de empleabilidad o el futuro laboral de la carrera, enfócate ÚNICAMENTE en los datos duros, cifras y resultados positivos para el egresado.\n"
@@ -240,7 +245,7 @@ instrucciones_base = (
     
     "🔑 PORTALES Y ENLACES OBLIGATORIOS (BLINDAJE DE LINKS):\n"
     "- PROHIBIDO inventar URLs. Usa solo estas:\n"
-    "  * Trámites, justificativos y requerimientos: [Portal de Solicitudes](https://solicitudes.uniacc.cl/login)\n"
+    "  * Trámites, justificativos, cambio de modalidad y requerimientos: [Portal de Solicitudes](https://solicitudes.uniacc.cl/login)\n"
     "  * Horarios, toma de ramos y notas (Diurno/Vesp): [Portal Alumno](https://portal.uniacc.cl)\n"
     "  * Aulas virtuales y notas (Semipresencial): [eCampus](https://ecampus.uniacc.cl)\n"
     "  * Certificados: [Soluciones UNIACC](http://soluciones.uniacc.cl)\n\n"
@@ -260,7 +265,7 @@ if "messages" not in st.session_state:
 
 # --- VISTA DE ESTUDIANTE ---
 if rol_seleccionado == "Estudiante 🎓":
-    # Encabezado Principal (ACTUALIZADO PARA VIDEO LOGO)
+    # Encabezado Principal
     col1, col2, col3 = st.columns([1, 1.2, 1])
     with col2:
         if os.path.exists("logo.mp4"):
@@ -273,7 +278,7 @@ if rol_seleccionado == "Estudiante 🎓":
                 </video>
             ''', unsafe_allow_html=True)
         elif os.path.exists("logo.png"):
-            st.image("logo.png", width="stretch") 
+            st.image("logo.png", use_container_width=True) 
         else:
             st.caption("🧠 Psicobot en línea")
             
@@ -337,7 +342,8 @@ if rol_seleccionado == "Estudiante 🎓":
                     hoy = datetime.date.today()
                     fecha_actual_sistema = hoy.strftime("%A, %d de %B de %Y")
                     
-                    nombre_modelo_oficial = 'models/gemini-2.5-flash'
+                    # Modelo oficial Gemini 1.5 Flash
+                    nombre_modelo_oficial = 'gemini-1.5-flash'
                     model = genai.GenerativeModel(model_name=nombre_modelo_oficial)
                     
                     full_prompt = (
@@ -355,7 +361,7 @@ if rol_seleccionado == "Estudiante 🎓":
                         st.markdown(respuesta_texto)
                         st.session_state.messages.append({"role": "assistant", "content": respuesta_texto})
                         
-                        es_vacio = "❌ No dispongo de ese registro" in respuesta_texto
+                        es_vacio = "Esa información no está disponible" in respuesta_texto
                         registrar_log(prompt_actual, respuesta_texto, no_registro=es_vacio)
                         ejecutar_rerun()
                     else:
@@ -393,7 +399,6 @@ if rol_seleccionado == "Estudiante 🎓":
 # --- VISTA DE ADMINISTRACIÓN (ESCUELA) ---
 elif rol_seleccionado == "Escuela (Admin) 🔑":
     st.markdown("<h1 style='color:#cc609b;'>📊 Panel de Analíticas Institucionales</h1>", unsafe_allow_html=True)
-    st.markdown("Clave de acceso de prueba: `psico2026`")
     
     password = st.text_input("Introduce la contraseña de acceso:", type="password")
     if password == "psico2026":
@@ -426,9 +431,8 @@ elif rol_seleccionado == "Escuela (Admin) 🔑":
                 
                 st.markdown("---")
                 
-                # 3. Registro bruto de auditoría
                 st.markdown("### 📋 Historial Completo de Interacciones")
-                st.dataframe(df_logs, width="stretch")
+                st.dataframe(df_logs, use_container_width=True)
             except Exception as ex_panel:
                 st.error(f"Error temporal al leer el archivo de analíticas: {ex_panel}")
             
