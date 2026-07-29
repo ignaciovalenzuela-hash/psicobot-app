@@ -104,7 +104,7 @@ def registrar_log(pregunta, respuesta, no_registro=False):
             nuevo_registro.to_csv(LOG_FILE, index=False, encoding='utf-8')
         else:
             nuevo_registro.to_csv(LOG_FILE, mode='a', header=False, index=False, encoding='utf-8')
-    except Exception as e:
+    except Exception:
         pass
 
 def actualizar_ultimo_feedback(tipo_feedback):
@@ -114,7 +114,7 @@ def actualizar_ultimo_feedback(tipo_feedback):
             if not df.empty:
                 df.at[df.index[-1], 'Feedback'] = tipo_feedback
                 df.to_csv(LOG_FILE, index=False, encoding='utf-8')
-    except Exception as e:
+    except Exception:
         pass
 
 # --- FUNCIONES DE LIMPIEZA Y FORMATO ---
@@ -191,7 +191,7 @@ instrucciones_base = (
     "1. Antes de entregar información sobre fechas, inscripciones de asignatura, inicio/fin de clases, exámenes, o trámites de calendario, DEBES verificar en la consulta o en el historial si el estudiante indicó su modalidad.\n"
     "2. Si NO se ha especificado la modalidad, DEBES preguntar primero: '¿A qué modalidad perteneces? (1. Presencial Diurno, 2. Presencial Vespertino o 3. Semipresencial)'.\n"
     "3. Si el estudiante responde que pertenece a la modalidad Semipresencial, DEBES preguntar obligatoriamente: '¿En qué año y semestre ingresaste?' (para determinar a qué calendario de Semipresencial corresponde).\n"
-    "4. Solo responde con la fecha/información exacta cuando tengas clara la modalidad (y la cohorte si es Semipresencial), basándote strictly en los 4 calendarios cargados en tu repositorio según las siguientes reglas:\n"
+    "4. Solo responde con la fecha/información exacta cuando tengas clara la modalidad (y la cohorte si es Semipresencial), basándote estrictamente en los 4 calendarios cargados en tu repositorio según las siguientes reglas:\n"
     "   - Si el estudiante indica que es de modalidad DIURNO, debes basarte EXCLUSIVAMENTE en el documento 'Calendario Académcio Pregado Diurno Estudiantes 2026.pdf'.\n"
     "   - Si el estudiante señala que es de modalidad VESPERTINA, debes basarte EXCLUSIVAMENTE en el documento 'Calendario Académico Pregrado Vespertino Estudiantes 2026.pdf'.\n"
     "   - Si el estudiante es SEMIPRESENCIAL y señala que ingresó del segundo semestre del 2026 hacia atrás, debes basarte EXCLUSIVAMENTE en el documento 'Calendario Académico Pregado Semipresencial Antiguos 2026.pdf'.\n"
@@ -342,10 +342,6 @@ if rol_seleccionado == "Estudiante 🎓":
                     hoy = datetime.date.today()
                     fecha_actual_sistema = hoy.strftime("%A, %d de %B de %Y")
                     
-                    # Modelo oficial Gemini 1.5 Flash
-                    nombre_modelo_oficial = 'gemini-1.5-flash'
-                    model = genai.GenerativeModel(model_name=nombre_modelo_oficial)
-                    
                     full_prompt = (
                         f"{instrucciones_base}\n\n"
                         f"⏰ FECHA: {fecha_actual_sistema}\n\n"
@@ -354,7 +350,24 @@ if rol_seleccionado == "Estudiante 🎓":
                         f"ESTUDIANTE: {prompt_actual}"
                     )
                     
-                    response = model.generate_content(full_prompt, generation_config={"temperature": 0.1})
+                    # --- SELECCIÓN DINÁMICA CON FALLBACK DE MODELOS ---
+                    modelos_candidatos = [
+                        'gemini-2.5-flash',
+                        'gemini-2.0-flash',
+                        'gemini-1.5-flash',
+                        'gemini-1.5-flash-latest',
+                        'models/gemini-1.5-flash'
+                    ]
+                    
+                    response = None
+                    for nombre_modelo in modelos_candidatos:
+                        try:
+                            m = genai.GenerativeModel(model_name=nombre_modelo)
+                            response = m.generate_content(full_prompt, generation_config={"temperature": 0.1})
+                            if response and hasattr(response, 'text') and response.text:
+                                break
+                        except Exception:
+                            continue
                     
                     if response and hasattr(response, 'text') and response.text:
                         respuesta_texto = response.text
@@ -365,7 +378,7 @@ if rol_seleccionado == "Estudiante 🎓":
                         registrar_log(prompt_actual, respuesta_texto, no_registro=es_vacio)
                         ejecutar_rerun()
                     else:
-                        st.warning("⚠️ El asistente no devolvió una respuesta válida. Intenta de nuevo.")
+                        st.error("⚠️ No se pudo obtener una respuesta de la API de Gemini. Verifica la validez de tu API Key en los Secrets.")
                         
                 except Exception as e:
                     st.error(f"⚠️ Error del sistema: {e}")
